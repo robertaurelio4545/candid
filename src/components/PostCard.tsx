@@ -280,7 +280,17 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
         className="bg-slate-50 relative cursor-pointer"
         onClick={() => !isModal && onOpen?.()}
       >
-        {mediaItems.length > 0 ? (
+ <div
+  className="absolute px-3 py-1 text-red-600 font-semibold text-sm pointer-events-none z-10"
+  style={{
+    left: '178.9px',
+    top: '124.5px',
+    backgroundColor: 'black',
+  }}
+>
+  candidteenpro.com
+</div>
+       {mediaItems.length > 0 ? (
           <>
             {mediaItems[currentMediaIndex].media_type === 'video' ? (
               <video
