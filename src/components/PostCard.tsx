@@ -162,6 +162,106 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
   const canViewLockedContent = isProUser || profile?.is_admin || isOwner;
   const shouldShowLockOverlay = !canViewLockedContent;
 
+  const addWatermarkToImage = async (imageUrl: string): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+
+        if (!ctx) {
+          reject(new Error('Failed to get canvas context'));
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0);
+
+        const fontSize = Math.max(24, Math.floor(canvas.width / 30));
+        ctx.font = `bold ${fontSize}px Arial`;
+        ctx.fillStyle = 'red';
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 3;
+        const text = 'candidteenpro.com';
+        const textMetrics = ctx.measureText(text);
+        const x = (canvas.width - textMetrics.width) / 2;
+        const y = canvas.height / 2;
+
+        ctx.strokeText(text, x, y);
+        ctx.fillText(text, x, y);
+
+        canvas.toBlob((blob) => {
+          if (blob) {
+            resolve(blob);
+          } else {
+            reject(new Error('Failed to create blob'));
+          }
+        }, 'image/jpeg', 0.95);
+      };
+
+      img.onerror = () => reject(new Error('Failed to load image'));
+      img.src = imageUrl;
+    });
+  };
+
+  const addWatermarkToVideo = async (videoUrl: string): Promise<Blob> => {
+    const response = await fetch(videoUrl);
+    const videoBlob = await response.blob();
+
+    const video = document.createElement('video');
+    video.crossOrigin = 'anonymous';
+    video.src = URL.createObjectURL(videoBlob);
+
+    return new Promise((resolve, reject) => {
+      video.onloadedmetadata = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+
+        if (!ctx) {
+          reject(new Error('Failed to get canvas context'));
+          return;
+        }
+
+        video.currentTime = 0;
+        video.onseeked = () => {
+          ctx.drawImage(video, 0, 0);
+
+          const fontSize = Math.max(24, Math.floor(canvas.width / 30));
+          ctx.font = `bold ${fontSize}px Arial`;
+          ctx.fillStyle = 'red';
+          ctx.strokeStyle = 'black';
+          ctx.lineWidth = 3;
+          const text = 'candidteenpro.com';
+          const textMetrics = ctx.measureText(text);
+          const x = (canvas.width - textMetrics.width) / 2;
+          const y = canvas.height / 2;
+
+          ctx.strokeText(text, x, y);
+          ctx.fillText(text, x, y);
+
+          canvas.toBlob((blob) => {
+            if (blob) {
+              URL.revokeObjectURL(video.src);
+              resolve(blob);
+            } else {
+              reject(new Error('Failed to create video thumbnail'));
+            }
+          }, 'image/jpeg', 0.95);
+        };
+      };
+
+      video.onerror = () => {
+        URL.revokeObjectURL(video.src);
+        reject(new Error('Failed to load video'));
+      };
+    });
+  };
+
   const handleDownload = async () => {
     if (!user) {
       alert('Please sign in to download media');
@@ -209,11 +309,21 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
       if (error) throw error;
       if (!data) throw new Error('No data received');
 
-      const url = window.URL.createObjectURL(data);
+      const mediaUrl = window.URL.createObjectURL(data);
+
+      let watermarkedBlob: Blob;
+      if (currentMediaType === 'video') {
+        watermarkedBlob = await addWatermarkToVideo(mediaUrl);
+      } else {
+        watermarkedBlob = await addWatermarkToImage(mediaUrl);
+      }
+
+      window.URL.revokeObjectURL(mediaUrl);
+
+      const url = window.URL.createObjectURL(watermarkedBlob);
       const link = document.createElement('a');
       link.href = url;
-      const extension = currentMediaType === 'video' ? 'mp4' : 'jpg';
-      link.download = `candidteenpro.com-${post.profiles?.username || 'media'}-${post.id.slice(0, 8)}.${extension}`;
+      link.download = `candidteenpro.com-${post.profiles?.username || 'media'}-${post.id.slice(0, 8)}.jpg`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
