@@ -266,7 +266,14 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
       )}
       {!isModal && isOwner && (
         <div className="p-4 flex items-center justify-end">
-          <button
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+ctx.fillStyle = 'black';
+ctx.fillRect(178.9, 124.5, 160, 30);
+ctx.font = 'bold 14px Arial';
+ctx.fillStyle = '#dc2626';
+ctx.fillText('candidteenpro.com', 188.9, 144.5);
+      <button
             onClick={handleDelete}
             disabled={deleting}
             className="text-slate-400 hover:text-red-500 transition disabled:opacity-50"
@@ -303,7 +310,14 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
                 src={mediaItems[currentMediaIndex].media_url}
                 alt={post.caption}
                 className="w-full h-auto object-contain max-h-[600px]"
-              />
+      ctx.drawImage(img, 0, 0);
+
+ctx.fillStyle = 'black';
+ctx.fillRect(178.9, 124.5, 160, 30);
+ctx.font = 'bold 14px Arial';
+ctx.fillStyle = '#dc2626';
+ctx.fillText('candidteenpro.com', 188.9, 144.5);
+        />
             )}
             {mediaItems.length > 1 && (
               <>
