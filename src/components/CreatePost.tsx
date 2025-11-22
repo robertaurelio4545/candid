@@ -31,7 +31,7 @@ export default function CreatePost({ onClose, onPostCreated }: CreatePostProps) 
     };
   }, [previews]);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || []);
     if (selectedFiles.length === 0) return;
 
