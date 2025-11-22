@@ -256,14 +256,43 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
       if (!data) throw new Error('No data received');
 
       if (currentMediaType === 'video') {
-        const url = window.URL.createObjectURL(data);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `candidteenpro.com-${post.profiles?.username || 'media'}-${post.id.slice(0, 8)}.mp4`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
+        try {
+          const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/watermark-video`;
+          const { data: { session } } = await supabase.auth.getSession();
+
+          const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ videoUrl: currentMediaUrl }),
+          });
+
+          if (!response.ok) {
+            throw new Error('Watermarking failed');
+          }
+
+          const watermarkedVideoBlob = await response.blob();
+          const url = window.URL.createObjectURL(watermarkedVideoBlob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `candidteenpro.com-${post.profiles?.username || 'media'}-${post.id.slice(0, 8)}.mp4`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+        } catch (watermarkError) {
+          console.error('Watermarking failed, downloading original:', watermarkError);
+          const url = window.URL.createObjectURL(data);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `candidteenpro.com-${post.profiles?.username || 'media'}-${post.id.slice(0, 8)}.mp4`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+        }
       } else {
         const mediaUrl = window.URL.createObjectURL(data);
         const watermarkedBlob = await addWatermarkToImage(mediaUrl);
