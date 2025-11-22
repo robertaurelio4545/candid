@@ -369,17 +369,16 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
         className="bg-slate-50 relative cursor-pointer"
         onClick={() => !isModal && onOpen?.()}
       >
- <div
-  className="absolute px-3 py-1 text-red-600 font-semibold text-sm pointer-events-none z-10"
-  style={{
-    left: '178.9px',
-    top: '124.5px',
-    backgroundColor: 'black',
-  }}
->
-  candidteenpro.com
-</div>
-       {mediaItems.length > 0 ? (
+        <div
+          className="absolute inset-0 flex items-center justify-center pointer-events-none z-10"
+        >
+          <div className="px-4 py-2 bg-black/70 rounded">
+            <span className="text-red-600 font-bold text-xl md:text-2xl" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.8)' }}>
+              candidteenpro.com
+            </span>
+          </div>
+        </div>
+        {mediaItems.length > 0 ? (
           <>
             {mediaItems[currentMediaIndex].media_type === 'video' ? (
               <video
