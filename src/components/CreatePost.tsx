@@ -237,7 +237,83 @@ const { data: post, error: insertError } = await Bolt Database
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+     {isAdmin && (
+  <div>
+    <label className="block text-sm font-medium text-slate-700 mb-2">
+      Post as User (Admin Only)
+    </label>
+    <div className="relative">
+      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+      <input
+        type="text"
+        placeholder="Search users..."
+        value={userSearchQuery}
+        onChange={(e) => setUserSearchQuery(e.target.value)}
+        className="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-lg focus:border-slate-500 focus:ring-2 focus:ring-slate-200 outline-none"
+      />
+    </div>
+    {userSearchQuery && (
+      <div className="mt-2 max-h-48 overflow-y-auto border border-slate-200 rounded-lg">
+        {users
+          .filter(u =>
+            u.username?.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+            u.full_name?.toLowerCase().includes(userSearchQuery.toLowerCase())
+          )
+          .slice(0, 10)
+          .map(u => (
+            <button
+              key={u.id}
+              type="button"
+              onClick={() => {
+                setSelectedUserId(u.id);
+                setUserSearchQuery(u.username || 'Unknown');
+              }}
+              className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 transition text-left"
+            >
+              {u.avatar_url ? (
+                <img
+                  src={u.avatar_url}
+                  alt={u.username}
+                  className="w-10 h-10 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-400 to-slate-600 flex items-center justify-center text-white font-semibold">
+                  {u.username?.charAt(0).toUpperCase() || 'U'}
+                </div>
+              )}
+              <div>
+                <p className="font-medium text-slate-900">{u.username}</p>
+                <p className="text-sm text-slate-600">{u.full_name || 'No name'}</p>
+              </div>
+            </button>
+          ))}
+      </div>
+    )}
+    {selectedUserId && (
+      <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
+        <span className="text-sm text-blue-900">
+          Posting as: <strong>{users.find(u => u.id === selectedUserId)?.username}</strong>
+        </span>
+        <button
+          type="button"
+          onClick={() => {
+            setSelectedUserId(null);
+            setUserSearchQuery('');
+          }}
+          className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+        >
+          Clear
+        </button>
+      </div>
+    )}
+    {!selectedUserId && !userSearchQuery && (
+      <p className="mt-2 text-sm text-slate-500">
+        Leave empty to post as yourself, or search to post as another user
+      </p>
+    )}
+  </div>
+)}
+   <form onSubmit={handleSubmit} className="p-6 space-y-6">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-3">
               Media (up to {MAX_FILES} files)
