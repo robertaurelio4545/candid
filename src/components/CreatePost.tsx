@@ -1,7 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { X, Upload, Image as ImageIcon, Video } from 'lucide-react';
+import { X, Upload, Image as ImageIcon, Video, Search } from 'lucide-react';
+
+type Profile = {
+  id: string;
+  username: string | null;
+  avatar_url: string | null;
+  full_name: string | null;
+  is_admin?: boolean;
+};
 
 type CreatePostProps = {
   onClose: () => void;
@@ -9,7 +17,7 @@ type CreatePostProps = {
 };
 
 export default function CreatePost({ onClose, onPostCreated }: CreatePostProps) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [caption, setCaption] = useState('');
   const [downloadUrl, setDownloadUrl] = useState('');
   const [files, setFiles] = useState<File[]>([]);
@@ -21,13 +29,14 @@ export default function CreatePost({ onClose, onPostCreated }: CreatePostProps) 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const MAX_FILES = 5;
 
- // Admin-only: Post as another user
-const [users, setUsers] = useState<Profile[]>([]);
-const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-const [userSearchQuery, setUserSearchQuery] = useState('');
-const [loadingUsers, setLoadingUsers] = useState(false);
-const isAdmin = profile?.is_admin || false;
- useEffect(() => {
+  // Admin-only: Post as another user
+  const [users, setUsers] = useState<Profile[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const isAdmin = profile?.is_admin || false;
+
+  useEffect(() => {
     return () => {
       previews.forEach(preview => {
         if (preview && preview.startsWith('blob:')) {
@@ -37,6 +46,29 @@ const isAdmin = profile?.is_admin || false;
     };
   }, [previews]);
 
+  useEffect(() => {
+    if (isAdmin) {
+      fetchUsers();
+    }
+  }, [isAdmin]);
+
+  const fetchUsers = async () => {
+    setLoadingUsers(true);
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, username, avatar_url, full_name')
+        .order('username', { ascending: true });
+
+      if (error) throw error;
+      setUsers(data || []);
+    } catch (err) {
+      console.error('Error fetching users:', err);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || []);
     if (selectedFiles.length === 0) return;
@@ -44,23 +76,7 @@ const isAdmin = profile?.is_admin || false;
     if (files.length + selectedFiles.length > MAX_FILES) {
       setError(`You can only upload up to ${MAX_FILES} files per post`);
       return;
-  const fetchUsers = async () => {
-  setLoadingUsers(true);
-  try {
-    const { data, error } = await Bolt Database
-      .from('profiles')
-      .select('id, username, avatar_url, full_name')
-      .order('username', { ascending: true });
-
-    if (error) throw error;
-    setUsers(data || []);
-  } catch (err) {
-    console.error('Error fetching users:', err);
-  } finally {
-    setLoadingUsers(false);
-  }
-};
-  }
+    }
 
     const MAX_FILE_SIZE = 133 * 1024 * 1024; // 133MB
     const validFiles: File[] = [];
@@ -161,28 +177,18 @@ const isAdmin = profile?.is_admin || false;
       uploadedUrls.push(...results);
       setUploadProgress(100);
 
+      // Use selected user ID if admin, otherwise use current user ID
+      const postUserId = isAdmin && selectedUserId ? selectedUserId : user.id;
+
       const { data: post, error: insertError } = await supabase
         .from('posts')
         .insert({
-          user_id: user.id,
+          user_id: postUserId,
           caption: caption.trim(),
           media_url: uploadedUrls[0],
           media_type: fileTypes[0],
           download_link: downloadUrl.trim() || null,
-    // Use selected user ID if admin, otherwise use current user ID
-const postUserId = isAdmin && selectedUserId ? selectedUserId : user.id;
-
-const { data: post, error: insertError } = await Bolt Database
-  .from('posts')
-  .insert({
-    user_id: postUserId,  // <-- Uses the selected user's ID
-    caption: caption.trim(),
-    media_url: uploadedUrls[0],
-    media_type: fileTypes[0],
-    download_link: downloadUrl.trim() || null,
-    is_locked: true,
-  })
-      is_locked: true,
+          is_locked: true,
         })
         .select()
         .single();
