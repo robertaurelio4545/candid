@@ -28,6 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(session?.user ?? null);
       if (session?.user) {
         fetchProfile(session.user.id);
+        updateLastActive();
       } else {
         setLoading(false);
       }
@@ -39,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(session?.user ?? null);
         if (session?.user) {
           await fetchProfile(session.user.id);
+          await updateLastActive();
         } else {
           setProfile(null);
         }
@@ -47,6 +49,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    updateLastActive();
+
+    const interval = setInterval(() => {
+      updateLastActive();
+    }, 5 * 60 * 1000);
+
+    const handleActivity = () => {
+      updateLastActive();
+    };
+
+    window.addEventListener('click', handleActivity);
+    window.addEventListener('keypress', handleActivity);
+    window.addEventListener('scroll', handleActivity);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('click', handleActivity);
+      window.removeEventListener('keypress', handleActivity);
+      window.removeEventListener('scroll', handleActivity);
+    };
+  }, [user]);
 
   const fetchProfile = async (userId: string) => {
     try {
@@ -62,6 +89,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Error fetching profile:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const updateLastActive = async () => {
+    if (!user) return;
+
+    try {
+      await supabase.rpc('update_last_active');
+    } catch (err) {
+      console.error('Error updating last active:', err);
     }
   };
 
