@@ -28,6 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(session?.user ?? null);
       if (session?.user) {
         fetchProfile(session.user.id);
+        updateLastActive();
       } else {
         setLoading(false);
       }
@@ -39,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(session?.user ?? null);
         if (session?.user) {
           await fetchProfile(session.user.id);
+          updateLastActive();
         } else {
           setProfile(null);
         }
@@ -47,6 +49,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const interval = setInterval(() => {
+      updateLastActive();
+    }, 60000);
+
+    const activityHandler = () => {
+      updateLastActive();
+    };
+
+    window.addEventListener('click', activityHandler);
+    window.addEventListener('keydown', activityHandler);
+    window.addEventListener('scroll', activityHandler);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('click', activityHandler);
+      window.removeEventListener('keydown', activityHandler);
+      window.removeEventListener('scroll', activityHandler);
+    };
+  }, [user]);
+
+  const updateLastActive = async () => {
+    try {
+      await supabase.rpc('update_last_active');
+    } catch (err) {
+      console.error('Error updating last active:', err);
+    }
+  };
 
   const fetchProfile = async (userId: string) => {
     try {
