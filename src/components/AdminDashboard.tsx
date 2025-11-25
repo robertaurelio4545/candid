@@ -128,7 +128,12 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
       .not('username', 'like', 'fake_user_%')
       .order('last_active_at', { ascending: false, nullsLast: true });
 
-    if (profilesError) throw profilesError;
+    if (profilesError) {
+      console.error('Error fetching profiles:', profilesError);
+      throw profilesError;
+    }
+
+    console.log('Profiles fetched:', profilesData?.length || 0);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
