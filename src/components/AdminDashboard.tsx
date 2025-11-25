@@ -1101,7 +1101,10 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
                           </div>
                           <p className="text-sm text-slate-600">{user.full_name || 'No name'}</p>
                           <p className="text-xs text-slate-500">{(user as any).email || 'No email'}</p>
-                          <p className="text-xs text-slate-400">
+  <p className="text-xs text-slate-400">
+  Last active: {user.last_active_at ? formatDate(user.last_active_at) : 'Never'}
+</p>
+                        <p className="text-xs text-slate-400">
                             Last active: {user.last_active_at ? formatDate(user.last_active_at) : 'Never'}
                           </p>
                           <div className="flex gap-2 mt-1">
