@@ -22,6 +22,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const updateLastActive = async () => {
+    try {
+      await supabase.rpc('update_last_active');
+    } catch (err) {
+      console.error('Error updating last active:', err);
+    }
+  };
+
+  const fetchProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error) throw error;
+      setProfile(data);
+    } catch (err) {
+      console.error('Error fetching profile:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -72,31 +97,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('scroll', activityHandler);
     };
   }, [user]);
-
-  const updateLastActive = async () => {
-    try {
-      await supabase.rpc('update_last_active');
-    } catch (err) {
-      console.error('Error updating last active:', err);
-    }
-  };
-
-  const fetchProfile = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
-
-      if (error) throw error;
-      setProfile(data);
-    } catch (err) {
-      console.error('Error fetching profile:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const signUp = async (email: string, password: string, username: string, fullName: string) => {
     const { error } = await supabase.auth.signUp({
