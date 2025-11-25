@@ -126,7 +126,7 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
       .from('profiles')
       .select('*')
       .not('username', 'like', 'fake_user_%')
-      .order('last_active_at', { ascending: false, nullsFirst: false });
+      .order('created_at', { ascending: false });
 
     if (profilesError) throw profilesError;
 
@@ -1101,9 +1101,6 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
                           </div>
                           <p className="text-sm text-slate-600">{user.full_name || 'No name'}</p>
                           <p className="text-xs text-slate-500">{(user as any).email || 'No email'}</p>
-                          <p className="text-xs text-slate-400">
-                            Last active: {user.last_active_at ? formatDate(user.last_active_at) : 'Never'}
-                          </p>
                           <div className="flex gap-2 mt-1">
                             {user.is_admin && (
                               <span className="inline-flex items-center gap-1 text-xs bg-slate-900 text-white px-2 py-0.5 rounded-full">
