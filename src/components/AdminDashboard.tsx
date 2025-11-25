@@ -126,7 +126,7 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
       .from('profiles')
       .select('*')
       .not('username', 'like', 'fake_user_%')
-      .order('last_active_at', { ascending: false, nullsFirst: false });
+      .order('last_active_at', { ascending: false, nullsLast: true });
 
     if (profilesError) throw profilesError;
 
