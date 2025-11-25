@@ -122,6 +122,7 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
   };
 
   const fetchUsers = async () => {
+    console.log('Fetching users...');
     const { data: profilesData, error: profilesError } = await supabase
       .from('profiles')
       .select('*')
@@ -130,10 +131,11 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
 
     if (profilesError) {
       console.error('Error fetching profiles:', profilesError);
-      throw profilesError;
+      setUsers([]);
+      return;
     }
 
-    console.log('Profiles fetched:', profilesData?.length || 0);
+    console.log('Profiles fetched:', profilesData?.length || 0, profilesData);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -177,9 +179,11 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
         email: emails[profile.id] || 'No email'
       }));
 
+      console.log('Setting users with emails:', usersWithEmail.length, usersWithEmail);
       setUsers(usersWithEmail);
     } catch (error) {
       console.error('Error fetching user emails:', error);
+      console.log('Setting users without emails:', profilesData?.length || 0);
       setUsers(profilesData || []);
     }
   };
