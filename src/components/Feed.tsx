@@ -57,14 +57,6 @@ export default function Feed({ isAuthenticated, onLoginClick, onMessageUser }: F
     );
   }
 
-  if (posts.length === 0) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-slate-600 text-lg">No posts yet. Be the first to share something!</p>
-      </div>
-    );
-  }
-
   return (
     <>
       {!isAuthenticated && (
@@ -80,6 +72,12 @@ export default function Feed({ isAuthenticated, onLoginClick, onMessageUser }: F
           >
             Sign In / Sign Up
           </button>
+        </div>
+      )}
+
+      {posts.length === 0 && (
+        <div className="text-center py-12">
+          <p className="text-slate-600 text-lg">No posts yet. Be the first to share something!</p>
         </div>
       )}
 
