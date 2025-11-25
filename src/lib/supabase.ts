@@ -28,7 +28,6 @@ export type Profile = {
   points: number;
   created_at: string;
   updated_at: string;
-  last_active_at: string | null;
 };
 
 export type AdminAction = {

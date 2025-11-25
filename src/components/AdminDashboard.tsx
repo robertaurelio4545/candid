@@ -122,20 +122,13 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
   };
 
   const fetchUsers = async () => {
-    console.log('Fetching users...');
     const { data: profilesData, error: profilesError } = await supabase
       .from('profiles')
       .select('*')
       .not('username', 'like', 'fake_user_%')
-      .order('last_active_at', { ascending: false, nullsLast: true });
+      .order('last_active_at', { ascending: false, nullsFirst: false });
 
-    if (profilesError) {
-      console.error('Error fetching profiles:', profilesError);
-      setUsers([]);
-      return;
-    }
-
-    console.log('Profiles fetched:', profilesData?.length || 0, profilesData);
+    if (profilesError) throw profilesError;
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -179,11 +172,9 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
         email: emails[profile.id] || 'No email'
       }));
 
-      console.log('Setting users with emails:', usersWithEmail.length, usersWithEmail);
       setUsers(usersWithEmail);
     } catch (error) {
       console.error('Error fetching user emails:', error);
-      console.log('Setting users without emails:', profilesData?.length || 0);
       setUsers(profilesData || []);
     }
   };
@@ -1110,10 +1101,7 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
                           </div>
                           <p className="text-sm text-slate-600">{user.full_name || 'No name'}</p>
                           <p className="text-xs text-slate-500">{(user as any).email || 'No email'}</p>
-  <p className="text-xs text-slate-400">
-  Last active: {user.last_active_at ? formatDate(user.last_active_at) : 'Never'}
-</p>
-                        <p className="text-xs text-slate-400">
+                          <p className="text-xs text-slate-400">
                             Last active: {user.last_active_at ? formatDate(user.last_active_at) : 'Never'}
                           </p>
                           <div className="flex gap-2 mt-1">
