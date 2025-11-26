@@ -1124,7 +1124,7 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
                             )}
                           </div>
                           <p className="text-sm text-slate-600">{user.full_name || 'No name'}</p>
-                          <p className="text-xs text-slate-500">{(user as any).email || 'No email'}</p>
+                          <p className="text-xs text-slate-500">{user.email || 'No email'}</p>
                           <div className="flex items-center gap-1.5 mt-0.5">
                             <Circle className={`w-2 h-2 ${isUserActive(user.last_active_at) ? 'fill-green-500 text-green-500' : 'fill-slate-400 text-slate-400'}`} />
                             <p className={`text-xs ${isUserActive(user.last_active_at) ? 'text-green-600 font-medium' : 'text-slate-500'}`}>

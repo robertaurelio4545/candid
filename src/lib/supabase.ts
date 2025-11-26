@@ -29,6 +29,7 @@ export type Profile = {
   created_at: string;
   updated_at: string;
   last_active_at: string | null;
+  email?: string;
 };
 
 export type AdminAction = {
