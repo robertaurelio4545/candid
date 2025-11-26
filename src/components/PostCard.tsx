@@ -24,6 +24,7 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
   const [submitting, setSubmitting] = useState(false);
   const [mediaItems, setMediaItems] = useState<PostMedia[]>([]);
   const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
+  const [downloadCount, setDownloadCount] = useState(0);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -69,6 +70,7 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
     loadLikes();
     loadComments();
     loadMedia();
+    loadDownloadCount();
   }, [post.id]);
 
   const loadMedia = async () => {
@@ -104,6 +106,17 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
 
     if (data) {
       setComments(data);
+    }
+  };
+
+  const loadDownloadCount = async () => {
+    const { count } = await supabase
+      .from('downloads')
+      .select('*', { count: 'exact', head: true })
+      .eq('post_id', post.id);
+
+    if (count !== null) {
+      setDownloadCount(count);
     }
   };
 
@@ -225,6 +238,8 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
       await supabase
         .from('downloads')
         .insert({ post_id: post.id, user_id: user.id });
+
+      setDownloadCount(prev => prev + 1);
 
       if (post.download_link && post.download_link.trim()) {
         window.open(post.download_link, '_blank', 'noopener,noreferrer');
@@ -478,7 +493,7 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
               title="Download"
             >
               <Download className="w-6 h-6" />
-              <span className="text-xs mt-0.5">Download Video</span>
+              <span className="text-xs mt-0.5">{downloadCount} {downloadCount === 1 ? 'download' : 'downloads'}</span>
             </button>
           </div>
         </div>
