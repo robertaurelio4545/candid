@@ -44,30 +44,18 @@ Deno.serve(async (req: Request) => {
       throw new Error("Access denied: Admin only");
     }
 
-    const emailMap: Record<string, string> = {};
-    let page = 1;
-    const perPage = 1000;
-    let hasMore = true;
+    const { data: authUsers, error: authError } = await supabaseClient.auth.admin.listUsers();
 
-    while (hasMore) {
-      const { data: authUsers, error: authError } = await supabaseClient.auth.admin.listUsers({
-        page,
-        perPage,
-      });
-
-      if (authError) {
-        throw new Error(`Failed to fetch users: ${authError.message}`);
-      }
-
-      authUsers.users.forEach(u => {
-        if (u.email) {
-          emailMap[u.id] = u.email;
-        }
-      });
-
-      hasMore = authUsers.users.length === perPage;
-      page++;
+    if (authError) {
+      throw new Error(`Failed to fetch users: ${authError.message}`);
     }
+
+    const emailMap: Record<string, string> = {};
+    authUsers.users.forEach(u => {
+      if (u.email) {
+        emailMap[u.id] = u.email;
+      }
+    });
 
     return new Response(
       JSON.stringify({ emails: emailMap }),
