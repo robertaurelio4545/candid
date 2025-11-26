@@ -130,6 +130,12 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
 
     if (profilesError) throw profilesError;
 
+    console.log('Raw profiles data:', profilesData?.slice(0, 2).map(p => ({
+      username: p.username,
+      last_active_at: p.last_active_at,
+      last_active_type: typeof p.last_active_at
+    })));
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
@@ -171,6 +177,12 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
         ...profile,
         email: emails[profile.id] || 'No email'
       }));
+
+      console.log('Users with email (first 2):', usersWithEmail.slice(0, 2).map(u => ({
+        username: u.username,
+        last_active_at: u.last_active_at,
+        email: u.email
+      })));
 
       setUsers(usersWithEmail);
     } catch (error) {
@@ -585,10 +597,12 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
   };
 
   const formatLastActive = (lastActiveAt: string | null) => {
+    console.log('formatLastActive input:', lastActiveAt, 'type:', typeof lastActiveAt);
     if (!lastActiveAt) return 'Never';
     const date = new Date(lastActiveAt);
     const now = new Date();
     const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    console.log('Calculated:', { diffInSeconds, date, now });
 
     if (diffInSeconds < 60) return 'Just now';
     if (diffInSeconds < 120) return '1 minute ago';
