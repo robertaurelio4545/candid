@@ -124,11 +124,12 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
   const fetchUsers = async () => {
     const { data: profilesData, error: profilesError } = await supabase
       .from('profiles')
-      .select('*')
+      .select('id, username, full_name, avatar_url, bio, is_admin, is_pro, subscription_expires_at, subscription_started_at, points, created_at, updated_at, last_active_at')
       .not('username', 'like', 'fake_user_%')
       .order('created_at', { ascending: false });
 
     if (profilesError) throw profilesError;
+    console.log('Fetched profiles data with last_active_at:', profilesData?.map(p => ({ username: p.username, last_active_at: p.last_active_at })));
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -585,10 +586,12 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
   };
 
   const formatLastActive = (lastActiveAt: string | null) => {
+    console.log('formatLastActive called with:', lastActiveAt);
     if (!lastActiveAt) return 'Never';
     const date = new Date(lastActiveAt);
     const now = new Date();
     const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    console.log('diffInSeconds:', diffInSeconds, 'date:', date, 'now:', now);
 
     if (diffInSeconds < 60) return 'Just now';
     if (diffInSeconds < 120) return '1 minute ago';
