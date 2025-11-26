@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, Post, Profile, AdminAction } from '../lib/supabase';
-import { X, Trash2, Shield, Users, Image as ImageIcon, Activity, Lock, Unlock, Trophy, Search, Crown, MessageSquare, Send, ExternalLink, CheckCircle, XCircle, Link, Mail } from 'lucide-react';
+import { X, Trash2, Shield, Users, Image as ImageIcon, Activity, Lock, Unlock, Trophy, Search, Crown, MessageSquare, Send, ExternalLink, CheckCircle, XCircle, Link, Mail, Circle } from 'lucide-react';
 import PostCard from './PostCard';
 import AdminMessaging from './AdminMessaging';
 
@@ -584,6 +584,27 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
     });
   };
 
+  const formatLastActive = (lastActiveAt: string | null) => {
+    if (!lastActiveAt) return 'Never';
+    const date = new Date(lastActiveAt);
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    if (diffInSeconds < 60) return 'Just now';
+    if (diffInSeconds < 120) return '1 minute ago';
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`;
+    if (diffInSeconds < 7200) return '1 hour ago';
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
+    if (diffInSeconds < 172800) return '1 day ago';
+    return `${Math.floor(diffInSeconds / 86400)} days ago`;
+  };
+
+  const isUserActive = (lastActiveAt: string | null) => {
+    if (!lastActiveAt) return false;
+    const diffInSeconds = Math.floor((new Date().getTime() - new Date(lastActiveAt).getTime()) / 1000);
+    return diffInSeconds < 300;
+  };
+
   const handleViewUserPosts = async (userId: string) => {
     setSelectedUserId(userId);
     setLoadingUserPosts(true);
@@ -1081,6 +1102,9 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
                               {user.username?.charAt(0).toUpperCase() || 'U'}
                             </div>
                           )}
+                          {isUserActive(user.last_active_at) && (
+                            <div className="absolute top-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full" title="Active now" />
+                          )}
                           {user.is_admin && (
                             <div className="absolute -bottom-1 -right-1 bg-slate-900 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-white">
                               ADMIN
@@ -1101,6 +1125,12 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
                           </div>
                           <p className="text-sm text-slate-600">{user.full_name || 'No name'}</p>
                           <p className="text-xs text-slate-500">{(user as any).email || 'No email'}</p>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <Circle className={`w-2 h-2 ${isUserActive(user.last_active_at) ? 'fill-green-500 text-green-500' : 'fill-slate-400 text-slate-400'}`} />
+                            <p className={`text-xs ${isUserActive(user.last_active_at) ? 'text-green-600 font-medium' : 'text-slate-500'}`}>
+                              {isUserActive(user.last_active_at) ? 'Active now' : formatLastActive(user.last_active_at)}
+                            </p>
+                          </div>
                           <div className="flex gap-2 mt-1">
                             {user.is_admin && (
                               <span className="inline-flex items-center gap-1 text-xs bg-slate-900 text-white px-2 py-0.5 rounded-full">
