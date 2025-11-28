@@ -50,24 +50,32 @@ export default function FollowButton({ userId, size = 'sm', onFollowChange }: Fo
     setLoading(true);
     try {
       if (isFollowing) {
-        await supabase
+        const { error } = await supabase
           .from('follows')
           .delete()
           .eq('follower_id', user.id)
           .eq('following_id', userId);
+
+        if (error) throw error;
         setIsFollowing(false);
       } else {
-        await supabase
+        const { error } = await supabase
           .from('follows')
           .insert({ follower_id: user.id, following_id: userId });
+
+        if (error) throw error;
         setIsFollowing(true);
       }
 
       if (onFollowChange) {
         onFollowChange();
       }
+
+      await checkFollowStatus();
     } catch (err) {
       console.error('Error toggling follow:', err);
+      alert('Failed to update follow status. Please try again.');
+      await checkFollowStatus();
     } finally {
       setLoading(false);
     }
