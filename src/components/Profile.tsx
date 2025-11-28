@@ -3,6 +3,7 @@ import { supabase, Profile as ProfileType, Post } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { X, Edit2, Grid, Camera, Trophy, Crown, AlertCircle } from 'lucide-react';
 import PostCard from './PostCard';
+import FollowButton from './FollowButton';
 
 type ProfileProps = {
   onClose: () => void;
@@ -566,6 +567,10 @@ export default function Profile({ onClose }: ProfileProps) {
                           )}
                         </div>
                       </div>
+                      <FollowButton userId={follower.id} size="md" onFollowChange={() => {
+                        fetchFollowCounts();
+                        fetchFollowers();
+                      }} />
                     </div>
                   ))
                 )}
@@ -603,6 +608,10 @@ export default function Profile({ onClose }: ProfileProps) {
                           )}
                         </div>
                       </div>
+                      <FollowButton userId={following.id} size="md" onFollowChange={() => {
+                        fetchFollowCounts();
+                        fetchFollowing();
+                      }} />
                     </div>
                   ))
                 )}

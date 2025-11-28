@@ -6,9 +6,10 @@ import { useAuth } from '../contexts/AuthContext';
 type FollowButtonProps = {
   userId: string;
   size?: 'sm' | 'md';
+  onFollowChange?: () => void;
 };
 
-export default function FollowButton({ userId, size = 'sm' }: FollowButtonProps) {
+export default function FollowButton({ userId, size = 'sm', onFollowChange }: FollowButtonProps) {
   const { user } = useAuth();
   const [isFollowing, setIsFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -60,6 +61,10 @@ export default function FollowButton({ userId, size = 'sm' }: FollowButtonProps)
           .from('follows')
           .insert({ follower_id: user.id, following_id: userId });
         setIsFollowing(true);
+      }
+
+      if (onFollowChange) {
+        onFollowChange();
       }
     } catch (err) {
       console.error('Error toggling follow:', err);
