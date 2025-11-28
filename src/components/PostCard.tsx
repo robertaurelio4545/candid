@@ -1,9 +1,10 @@
 import { Post, Comment, PostMedia } from '../lib/supabase';
-import { Heart, MessageCircle, Trash2, Download, ChevronLeft, ChevronRight, Lock, Crown } from 'lucide-react';
+import { Heart, MessageCircle, Trash2, Download, ChevronLeft, ChevronRight, Lock, Crown, Flag } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { linkify } from '../utils/linkify';
+import ReportModal from './ReportModal';
 
 type PostCardProps = {
   post: Post;
@@ -25,6 +26,7 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
   const [mediaItems, setMediaItems] = useState<PostMedia[]>([]);
   const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
   const [downloadCount, setDownloadCount] = useState(0);
+  const [showReportModal, setShowReportModal] = useState(false);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -357,6 +359,39 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
               <p className="text-xs text-slate-500">{formatDate(post.created_at)}</p>
             </div>
           </div>
+          <div className="flex items-center gap-2">
+            {!isOwner && user && (
+              <button
+                onClick={() => setShowReportModal(true)}
+                className="text-slate-400 hover:text-red-500 transition"
+                title="Report post"
+              >
+                <Flag className="w-5 h-5" />
+              </button>
+            )}
+            {isOwner && (
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="text-slate-400 hover:text-red-500 transition disabled:opacity-50"
+              >
+                <Trash2 className="w-5 h-5" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+      {!isModal && (
+        <div className="p-4 flex items-center justify-end gap-2">
+          {!isOwner && user && (
+            <button
+              onClick={() => setShowReportModal(true)}
+              className="text-slate-400 hover:text-red-500 transition"
+              title="Report post"
+            >
+              <Flag className="w-5 h-5" />
+            </button>
+          )}
           {isOwner && (
             <button
               onClick={handleDelete}
@@ -366,17 +401,6 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
               <Trash2 className="w-5 h-5" />
             </button>
           )}
-        </div>
-      )}
-      {!isModal && isOwner && (
-        <div className="p-4 flex items-center justify-end">
-          <button
-            onClick={handleDelete}
-            disabled={deleting}
-            className="text-slate-400 hover:text-red-500 transition disabled:opacity-50"
-          >
-            <Trash2 className="w-5 h-5" />
-          </button>
         </div>
       )}
 
@@ -614,6 +638,13 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
           </>
         )}
       </div>
+
+      {showReportModal && (
+        <ReportModal
+          postId={post.id}
+          onClose={() => setShowReportModal(false)}
+        />
+      )}
     </div>
   );
 }
