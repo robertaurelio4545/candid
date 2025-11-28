@@ -197,13 +197,16 @@ function AppContent() {
       </main>
 
       <footer className="max-w-7xl mx-auto px-4 py-6 mt-12 border-t border-slate-200">
-        <div className="text-center">
+        <div className="text-center space-y-2">
           <a
             href="/2257"
-            className="text-sm text-slate-600 hover:text-slate-900 underline transition"
+            className="text-sm text-slate-600 hover:text-slate-900 underline transition block"
           >
             18 U.S.C. § 2257 Compliance Statement
           </a>
+          <div className="text-sm text-slate-600">
+            Contact: <a href="mailto:admin@candidteenpro.com" className="text-slate-900 hover:underline">admin@candidteenpro.com</a>
+          </div>
         </div>
       </footer>
 

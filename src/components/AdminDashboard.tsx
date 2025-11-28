@@ -44,7 +44,7 @@ type UserToUserMessage = {
 type CombinedMessage = AdminMessage | UserToUserMessage;
 
 export default function AdminDashboard({ onClose }: AdminDashboardProps) {
-  const [activeTab, setActiveTab] = useState<'posts' | 'users' | 'logs' | 'messages' | 'sponsors' | 'cancellations'>('posts');
+  const [activeTab, setActiveTab] = useState<'posts' | 'users' | 'logs' | 'messages' | 'sponsors' | 'cancellations' | 'inbox'>('posts');
   const [posts, setPosts] = useState<Post[]>([]);
   const [users, setUsers] = useState<Profile[]>([]);
   const [logs, setLogs] = useState<AdminAction[]>([]);
@@ -953,6 +953,16 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
             >
               Cancellations
             </button>
+            <button
+              onClick={() => setActiveTab('inbox')}
+              className={`px-4 py-2 font-medium transition ${
+                activeTab === 'inbox'
+                  ? 'text-slate-900 border-b-2 border-slate-900'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Email Inbox
+            </button>
           </div>
 
           <div className="mb-6">
@@ -1652,6 +1662,55 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
                       <p className="text-slate-600">No cancellations yet</p>
                     </div>
                   )}
+                </div>
+              )}
+
+              {activeTab === 'inbox' && (
+                <div className="space-y-4">
+                  <div className="bg-slate-50 rounded-lg p-6">
+                    <div className="flex items-center gap-3 mb-4">
+                      <Mail className="w-6 h-6 text-slate-900" />
+                      <h3 className="text-lg font-semibold text-slate-900">Admin Email Inbox</h3>
+                    </div>
+                    <div className="bg-white border border-slate-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="font-semibold text-slate-900">Email Address:</span>
+                        <a
+                          href="mailto:admin@candidteenpro.com"
+                          className="text-slate-900 font-mono text-sm hover:text-blue-600 hover:underline transition"
+                        >
+                          admin@candidteenpro.com
+                        </a>
+                      </div>
+                      <div className="border-t border-slate-200 pt-3">
+                        <p className="text-sm text-slate-600 mb-2">
+                          This is your primary contact email for:
+                        </p>
+                        <ul className="text-sm text-slate-600 space-y-1 list-disc list-inside">
+                          <li>General inquiries and support requests</li>
+                          <li>Business partnerships and sponsorships</li>
+                          <li>Legal compliance and takedown requests</li>
+                          <li>User feedback and suggestions</li>
+                        </ul>
+                      </div>
+                      <div className="mt-4 pt-3 border-t border-slate-200">
+                        <p className="text-xs text-slate-500">
+                          Access your email inbox through your email provider dashboard.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex gap-3">
+                      <Mail className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                      <div className="text-sm text-blue-900">
+                        <p className="font-semibold mb-1">Email Configuration</p>
+                        <p className="text-blue-800">
+                          Configure this email with your domain provider (e.g., Google Workspace, Microsoft 365, or your hosting provider's email service).
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
