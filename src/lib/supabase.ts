@@ -90,3 +90,10 @@ export type Post = {
   like_count?: number;
   user_has_liked?: boolean;
 };
+
+export type Follow = {
+  id: string;
+  follower_id: string;
+  following_id: string;
+  created_at: string;
+};

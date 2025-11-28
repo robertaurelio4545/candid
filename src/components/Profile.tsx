@@ -23,13 +23,27 @@ export default function Profile({ onClose }: ProfileProps) {
   const [canceling, setCanceling] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [redeeming, setRedeeming] = useState(false);
+  const [activeTab, setActiveTab] = useState<'posts' | 'following' | 'followers'>('posts');
+  const [followingUsers, setFollowingUsers] = useState<ProfileType[]>([]);
+  const [followerUsers, setFollowerUsers] = useState<ProfileType[]>([]);
+  const [followingCount, setFollowingCount] = useState(0);
+  const [followersCount, setFollowersCount] = useState(0);
 
   useEffect(() => {
     if (user) {
       fetchProfile();
       fetchUserPosts();
+      fetchFollowCounts();
     }
   }, [user]);
+
+  useEffect(() => {
+    if (activeTab === 'following') {
+      fetchFollowing();
+    } else if (activeTab === 'followers') {
+      fetchFollowers();
+    }
+  }, [activeTab]);
 
   const fetchProfile = async () => {
     if (!user) return;
@@ -81,6 +95,69 @@ export default function Profile({ onClose }: ProfileProps) {
       setPosts(data || []);
     } catch (err) {
       console.error('Error fetching posts:', err);
+    }
+  };
+
+  const fetchFollowCounts = async () => {
+    if (!user) return;
+
+    const { count: followingCount } = await supabase
+      .from('follows')
+      .select('*', { count: 'exact', head: true })
+      .eq('follower_id', user.id);
+
+    const { count: followersCount } = await supabase
+      .from('follows')
+      .select('*', { count: 'exact', head: true })
+      .eq('following_id', user.id);
+
+    setFollowingCount(followingCount || 0);
+    setFollowersCount(followersCount || 0);
+  };
+
+  const fetchFollowing = async () => {
+    if (!user) return;
+
+    const { data } = await supabase
+      .from('follows')
+      .select(`
+        following:profiles!follows_following_id_fkey(
+          id,
+          username,
+          full_name,
+          avatar_url,
+          is_pro,
+          is_admin
+        )
+      `)
+      .eq('follower_id', user.id);
+
+    if (data) {
+      const users = data.map((item: any) => item.following).filter(Boolean);
+      setFollowingUsers(users);
+    }
+  };
+
+  const fetchFollowers = async () => {
+    if (!user) return;
+
+    const { data } = await supabase
+      .from('follows')
+      .select(`
+        follower:profiles!follows_follower_id_fkey(
+          id,
+          username,
+          full_name,
+          avatar_url,
+          is_pro,
+          is_admin
+        )
+      `)
+      .eq('following_id', user.id);
+
+    if (data) {
+      const users = data.map((item: any) => item.follower).filter(Boolean);
+      setFollowerUsers(users);
     }
   };
 
@@ -386,6 +463,20 @@ export default function Profile({ onClose }: ProfileProps) {
                       <span className="font-semibold text-slate-900">{posts.length}</span>
                       <span className="text-slate-600 ml-1">posts</span>
                     </div>
+                    <button
+                      onClick={() => setActiveTab('followers')}
+                      className="hover:text-slate-900 transition"
+                    >
+                      <span className="font-semibold text-slate-900">{followersCount}</span>
+                      <span className="text-slate-600 ml-1">followers</span>
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('following')}
+                      className="hover:text-slate-900 transition"
+                    >
+                      <span className="font-semibold text-slate-900">{followingCount}</span>
+                      <span className="text-slate-600 ml-1">following</span>
+                    </button>
                   </div>
                 </div>
               )}
@@ -393,21 +484,128 @@ export default function Profile({ onClose }: ProfileProps) {
           </div>
 
           <div className="border-t border-slate-200 pt-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Grid className="w-5 h-5 text-slate-600" />
-              <h4 className="font-semibold text-slate-900">Posts</h4>
+            <div className="flex gap-2 mb-6 border-b border-slate-200">
+              <button
+                onClick={() => setActiveTab('posts')}
+                className={`px-4 py-2 font-medium transition ${
+                  activeTab === 'posts'
+                    ? 'text-slate-900 border-b-2 border-slate-900'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Grid className="w-5 h-5" />
+                  Posts
+                </div>
+              </button>
+              <button
+                onClick={() => setActiveTab('followers')}
+                className={`px-4 py-2 font-medium transition ${
+                  activeTab === 'followers'
+                    ? 'text-slate-900 border-b-2 border-slate-900'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Followers ({followersCount})
+              </button>
+              <button
+                onClick={() => setActiveTab('following')}
+                className={`px-4 py-2 font-medium transition ${
+                  activeTab === 'following'
+                    ? 'text-slate-900 border-b-2 border-slate-900'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Following ({followingCount})
+              </button>
             </div>
 
-            {posts.length === 0 ? (
-              <div className="text-center py-12">
-                <Camera className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                <p className="text-slate-600">No posts yet</p>
+            {activeTab === 'posts' && (
+              posts.length === 0 ? (
+                <div className="text-center py-12">
+                  <Camera className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                  <p className="text-slate-600">No posts yet</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {posts.map((post) => (
+                    <PostCard key={post.id} post={post} onDelete={fetchUserPosts} />
+                  ))}
+                </div>
+              )
+            )}
+
+            {activeTab === 'followers' && (
+              <div className="space-y-3">
+                {followerUsers.length === 0 ? (
+                  <div className="text-center py-12">
+                    <p className="text-slate-600">No followers yet</p>
+                  </div>
+                ) : (
+                  followerUsers.map((follower) => (
+                    <div key={follower.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        {follower.avatar_url ? (
+                          <img
+                            src={follower.avatar_url}
+                            alt={follower.username}
+                            className="w-12 h-12 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-slate-400 to-slate-600 flex items-center justify-center text-white font-semibold">
+                            {follower.username?.charAt(0).toUpperCase() || 'U'}
+                          </div>
+                        )}
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-slate-900">{follower.username}</span>
+                            {follower.is_pro && <Crown className="w-4 h-4 text-yellow-500" />}
+                          </div>
+                          {follower.full_name && (
+                            <p className="text-sm text-slate-600">{follower.full_name}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
-            ) : (
-              <div className="space-y-6">
-                {posts.map((post) => (
-                  <PostCard key={post.id} post={post} onDelete={fetchUserPosts} />
-                ))}
+            )}
+
+            {activeTab === 'following' && (
+              <div className="space-y-3">
+                {followingUsers.length === 0 ? (
+                  <div className="text-center py-12">
+                    <p className="text-slate-600">Not following anyone yet</p>
+                  </div>
+                ) : (
+                  followingUsers.map((following) => (
+                    <div key={following.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        {following.avatar_url ? (
+                          <img
+                            src={following.avatar_url}
+                            alt={following.username}
+                            className="w-12 h-12 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-slate-400 to-slate-600 flex items-center justify-center text-white font-semibold">
+                            {following.username?.charAt(0).toUpperCase() || 'U'}
+                          </div>
+                        )}
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-slate-900">{following.username}</span>
+                            {following.is_pro && <Crown className="w-4 h-4 text-yellow-500" />}
+                          </div>
+                          {following.full_name && (
+                            <p className="text-sm text-slate-600">{following.full_name}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             )}
           </div>
