@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { linkify } from '../utils/linkify';
-import FollowButton from './FollowButton';
 
 type PostCardProps = {
   post: Post;
@@ -354,7 +353,6 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
                 {post.profiles?.is_pro && (
                   <Crown className="w-4 h-4 text-yellow-500" />
                 )}
-                {post.user_id && <FollowButton userId={post.user_id} size="sm" />}
               </div>
               <p className="text-xs text-slate-500">{formatDate(post.created_at)}</p>
             </div>
