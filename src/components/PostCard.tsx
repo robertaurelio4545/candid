@@ -516,7 +516,7 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
               className="flex flex-col items-center text-slate-600 hover:text-slate-900 transition"
               title="Download"
             >
-              <span className="text-xs font-medium mb-1">Download Full Video</span>
+              <span className="text-xs font-medium mb-1">Download Full Video!(May Not Work On Safari)</span>
               <Download className="w-6 h-6" />
               <span className="text-xs mt-0.5">{downloadCount} {downloadCount === 1 ? 'download' : 'downloads'}</span>
             </button>
