@@ -355,7 +355,7 @@ const handleDownload = async () => {
     const blob = await res.blob();
 
     if (currentMediaType === 'video') {
-      try {
+      try {}
         const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/watermark-video`;
         const { data: { session } } = await supabase.auth.getSession();
 
@@ -381,7 +381,7 @@ const handleDownload = async () => {
         a.click();
         a.remove();
         URL.revokeObjectURL(url);
-      } catch {
+      } catch {}
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
