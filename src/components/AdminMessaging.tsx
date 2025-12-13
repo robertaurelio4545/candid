@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Send, Users, User, Trash2, X } from 'lucide-react';
+const [adminMessages, setAdminMessages] = useState<any[]>([]);
+const [adminMessagesLoading, setAdminMessagesLoading] = useState(false);
 
 type Profile = {
   id: string;
@@ -24,22 +26,43 @@ type AdminMessagingProps = {
   onClose: () => void;
 };
 
-export default function AdminMessaging({ onClose }: AdminMessagingProps) {
-  const { user } = useAuth();
-  const [message, setMessage] = useState('');
-  const [sending, setSending] = useState(false);
-  const [messageType, setMessageType] = useState<'broadcast' | 'individual'>('broadcast');
-  const [selectedUserId, setSelectedUserId] = useState('');
-  const [users, setUsers] = useState<Profile[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [sentMessages, setSentMessages] = useState<BroadcastMessage[]>([]);
-  const [loading, setLoading] = useState(true);
+const loadAdminMessages = async () => {
+  setAdminMessagesLoading(true);
+
+  const { data, error } = await supabase
+    .from('admin_messages')
+    .select(`
+      id,
+      user_id,
+      message,
+      created_at,
+      admin_reply,
+      replied_at,
+      replied_by,
+      profiles:user_id (
+        id,
+        username,
+        is_pro
+      )
+    `)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Failed to load admin messages:', error);
+    setAdminMessagesLoading(false);
+    return;
+  }
+
+  setAdminMessages(data || []);
+  setAdminMessagesLoading(false);
+};
 
   useEffect(() => {
     fetchUsers();
     fetchSentMessages();
   }, []);
-
+loadAdminMessages();
+}, []);
   const fetchUsers = async () => {
     try {
       const { data, error } = await supabase
