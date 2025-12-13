@@ -239,8 +239,14 @@ const isIOS = () =>
   /iPad|iPhone|iPod/.test(navigator.userAgent) ||
   (navigator.userAgent.includes('Mac') && 'ontouchend' in document);
 
+// iOS Safari detection helper
+const isIOS = () =>
+  /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.userAgent.includes('Mac') && 'ontouchend' in document);
+
 const handleDownload = async () => {
-  // 🔓 If post is NOT public, enforce Pro / admin rules
+  // 🔓 PUBLIC posts → allow anyone
+  // 🔒 PRIVATE posts → require Pro/Admin + login
   if (!isPublicPost) {
     if (!user) {
       alert('Please sign in to download media');
@@ -255,15 +261,12 @@ const handleDownload = async () => {
     }
   }
 
-  // 📱 iOS Safari user-gesture preservation
-  const ios =
-    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.userAgent.includes('Mac') && 'ontouchend' in document);
-
+  // 📱 Preserve user gesture on iOS
+  const ios = isIOS();
   const iosTab = ios ? window.open('about:blank', '_blank') : null;
 
   try {
-    // 📊 Track downloads ONLY if user exists
+    // 📊 Track downloads only if user exists
     if (user) {
       await supabase.from('downloads').insert({
         post_id: post.id,
@@ -272,7 +275,7 @@ const handleDownload = async () => {
       setDownloadCount(prev => prev + 1);
     }
 
-    // 🔗 Direct download link always wins
+    // 🔗 Direct download link wins
     if (post.download_link && post.download_link.trim()) {
       if (ios && iosTab) iosTab.location.href = post.download_link;
       else window.open(post.download_link, '_blank', 'noopener,noreferrer');
@@ -289,117 +292,51 @@ const handleDownload = async () => {
         ? mediaItems[currentMediaIndex].media_type
         : post.media_type;
 
-    // 🌍 PUBLIC POST: allow direct access for everyone
+    // 🌍 PUBLIC post → just open media (works logged out + iPhone)
     if (isPublicPost) {
       if (ios && iosTab) iosTab.location.href = currentMediaUrl;
       else window.open(currentMediaUrl, '_blank', 'noopener,noreferrer');
       return;
     }
 
-    // ⬇️ KEEP your existing Pro-only download logic BELOW this
-
-  }
-
-  // 🔐 Keep iOS user gesture alive
-  const ios = isIOS();
-  const iosTab = ios ? window.open('about:blank', '_blank') : null;
-
-  try {
-    // Track download
-    await supabase.from('downloads').insert({
-      post_id: post.id,
-      user_id: user.id,
-    });
-    setDownloadCount(prev => prev + 1);
-
-    // If post has direct download link, use it
-    if (post.download_link && post.download_link.trim()) {
-      if (ios && iosTab) iosTab.location.href = post.download_link;
-      else window.open(post.download_link, '_blank', 'noopener,noreferrer');
-      return;
-    }
-
-    const currentMediaUrl =
-      mediaItems.length > 0
-        ? mediaItems[currentMediaIndex].media_url
-        : post.media_url;
-
-    const currentMediaType =
-      mediaItems.length > 0
-        ? mediaItems[currentMediaIndex].media_type
-        : post.media_type;
-
-    // Extract Supabase storage path
+    // 🔒 PRIVATE post → signed URL + download
     const urlParts = currentMediaUrl.split('/');
     const bucketIndex = urlParts.findIndex(p => p === 'media');
     if (bucketIndex === -1) throw new Error('Invalid media URL');
 
     const filePath = urlParts.slice(bucketIndex + 1).join('/');
 
-    // 🔑 Generate signed URL (Safari-safe)
     const { data: signed, error } = await supabase.storage
       .from('media')
       .createSignedUrl(filePath, 60);
 
     if (error) throw error;
 
-    // 📱 iOS: open signed URL (Save via Share sheet)
+    // iOS: open signed URL
     if (ios) {
       if (iosTab) iosTab.location.href = signed.signedUrl;
       else window.location.href = signed.signedUrl;
       return;
     }
 
-    // 🖥 Desktop / Android: fetch blob & watermark
+    // Desktop/Android: force download
     const res = await fetch(signed.signedUrl);
     const blob = await res.blob();
 
     if (currentMediaType === 'video') {
-      try {}
-        const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/watermark-video`;
-        const { data: { session } } = await supabase.auth.getSession();
-
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${
-              session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY
-            }`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ videoUrl: currentMediaUrl }),
-        });
-
-        if (!response.ok) throw new Error('Watermark failed');
-
-        const watermarked = await response.blob();
-        const url = URL.createObjectURL(watermarked);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `candidteenpro.com-${post.profiles?.username || 'media'}-${post.id.slice(0, 8)}.mp4`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-      } catch {}
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `candidteenpro.com-${post.profiles?.username || 'media'}-${post.id.slice(0, 8)}.mp4`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-      }
-    } else {
-      const mediaUrl = URL.createObjectURL(blob);
-      const watermarkedBlob = await addWatermarkToImage(mediaUrl);
-      URL.revokeObjectURL(mediaUrl);
-
-      const url = URL.createObjectURL(watermarkedBlob);
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `candidteenpro.com-${post.profiles?.username || 'media'}-${post.id.slice(0, 8)}.jpg`;
+      a.download = `candidteenpro-${post.id}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `candidteenpro-${post.id}.jpg`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -411,6 +348,7 @@ const handleDownload = async () => {
     alert('Failed to download media.');
   }
 };
+
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
