@@ -239,10 +239,7 @@ const isIOS = () =>
   /iPad|iPhone|iPod/.test(navigator.userAgent) ||
   (navigator.userAgent.includes('Mac') && 'ontouchend' in document);
 
-// iOS Safari detection helper
-const isIOS = () =>
-  /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-  (navigator.userAgent.includes('Mac') && 'ontouchend' in document);
+
 
 const handleDownload = async () => {
   // 🔓 PUBLIC posts → allow anyone
