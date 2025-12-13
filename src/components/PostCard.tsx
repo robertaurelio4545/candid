@@ -223,112 +223,136 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
   };
 
 
-  const handleDownload = async () => {
-    if (!user) {
-      alert('Please sign in to download media');
+  // iOS Safari detection (including iPadOS)
+const isIOS = () =>
+  /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.userAgent.includes('Mac') && 'ontouchend' in document);
+
+const handleDownload = async () => {
+  if (!user) {
+    alert('Please sign in to download media');
+    return;
+  }
+
+  if (!isProUser && !profile?.is_admin) {
+    alert('Upgrade to Pro to download media');
+    const upgradeBtn = document.querySelector('[data-upgrade-button]') as HTMLButtonElement;
+    upgradeBtn?.click();
+    return;
+  }
+
+  // 🔐 Keep iOS user gesture alive
+  const ios = isIOS();
+  const iosTab = ios ? window.open('about:blank', '_blank') : null;
+
+  try {
+    // Track download
+    await supabase.from('downloads').insert({
+      post_id: post.id,
+      user_id: user.id,
+    });
+    setDownloadCount(prev => prev + 1);
+
+    // If post has direct download link, use it
+    if (post.download_link && post.download_link.trim()) {
+      if (ios && iosTab) iosTab.location.href = post.download_link;
+      else window.open(post.download_link, '_blank', 'noopener,noreferrer');
       return;
     }
 
-    if (!isProUser && !profile?.is_admin) {
-      alert('Upgrade to Pro to download media');
-      const upgradeBtn = document.querySelector('[data-upgrade-button]') as HTMLButtonElement;
-      upgradeBtn?.click();
-      return;
-    }
-
-    try {
-      await supabase
-        .from('downloads')
-        .insert({ post_id: post.id, user_id: user.id });
-
-      setDownloadCount(prev => prev + 1);
-
-      if (post.download_link && post.download_link.trim()) {
-        window.open(post.download_link, '_blank', 'noopener,noreferrer');
-        return;
-      }
-
-      const currentMediaUrl = mediaItems.length > 0
+    const currentMediaUrl =
+      mediaItems.length > 0
         ? mediaItems[currentMediaIndex].media_url
         : post.media_url;
 
-      const currentMediaType = mediaItems.length > 0
+    const currentMediaType =
+      mediaItems.length > 0
         ? mediaItems[currentMediaIndex].media_type
         : post.media_type;
 
-      const urlParts = currentMediaUrl.split('/');
-      const bucketIndex = urlParts.findIndex(part => part === 'media');
+    // Extract Supabase storage path
+    const urlParts = currentMediaUrl.split('/');
+    const bucketIndex = urlParts.findIndex(p => p === 'media');
+    if (bucketIndex === -1) throw new Error('Invalid media URL');
 
-      if (bucketIndex === -1) {
-        throw new Error('Invalid media URL');
-      }
+    const filePath = urlParts.slice(bucketIndex + 1).join('/');
 
-      const filePath = urlParts.slice(bucketIndex + 1).join('/');
+    // 🔑 Generate signed URL (Safari-safe)
+    const { data: signed, error } = await supabase.storage
+      .from('media')
+      .createSignedUrl(filePath, 60);
 
-      const { data, error } = await supabase.storage
-        .from('media')
-        .download(filePath);
+    if (error) throw error;
 
-      if (error) throw error;
-      if (!data) throw new Error('No data received');
-
-      if (currentMediaType === 'video') {
-        try {
-          const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/watermark-video`;
-          const { data: { session } } = await supabase.auth.getSession();
-
-          const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ videoUrl: currentMediaUrl }),
-          });
-
-          if (!response.ok) {
-            throw new Error('Watermarking failed');
-          }
-
-          const watermarkedVideoBlob = await response.blob();
-          const url = window.URL.createObjectURL(watermarkedVideoBlob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = `candidteenpro.com-${post.profiles?.username || 'media'}-${post.id.slice(0, 8)}.mp4`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          window.URL.revokeObjectURL(url);
-        } catch (watermarkError) {
-          console.error('Watermarking failed, downloading original:', watermarkError);
-          const url = window.URL.createObjectURL(data);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = `candidteenpro.com-${post.profiles?.username || 'media'}-${post.id.slice(0, 8)}.mp4`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          window.URL.revokeObjectURL(url);
-        }
-      } else {
-        const mediaUrl = window.URL.createObjectURL(data);
-        const watermarkedBlob = await addWatermarkToImage(mediaUrl);
-        window.URL.revokeObjectURL(mediaUrl);
-
-        const url = window.URL.createObjectURL(watermarkedBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `candidteenpro.com-${post.profiles?.username || 'media'}-${post.id.slice(0, 8)}.jpg`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      }
-    } catch (err) {
-      console.error('Error downloading media:', err);
-      alert('Failed to download media. Please try again.');
+    // 📱 iOS: open signed URL (Save via Share sheet)
+    if (ios) {
+      if (iosTab) iosTab.location.href = signed.signedUrl;
+      else window.location.href = signed.signedUrl;
+      return;
     }
-  };
+
+    // 🖥 Desktop / Android: fetch blob & watermark
+    const res = await fetch(signed.signedUrl);
+    const blob = await res.blob();
+
+    if (currentMediaType === 'video') {
+      try {
+        const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/watermark-video`;
+        const { data: { session } } = await supabase.auth.getSession();
+
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${
+              session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY
+            }`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ videoUrl: currentMediaUrl }),
+        });
+
+        if (!response.ok) throw new Error('Watermark failed');
+
+        const watermarked = await response.blob();
+        const url = URL.createObjectURL(watermarked);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `candidteenpro.com-${post.profiles?.username || 'media'}-${post.id.slice(0, 8)}.mp4`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `candidteenpro.com-${post.profiles?.username || 'media'}-${post.id.slice(0, 8)}.mp4`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+    } else {
+      const mediaUrl = URL.createObjectURL(blob);
+      const watermarkedBlob = await addWatermarkToImage(mediaUrl);
+      URL.revokeObjectURL(mediaUrl);
+
+      const url = URL.createObjectURL(watermarkedBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `candidteenpro.com-${post.profiles?.username || 'media'}-${post.id.slice(0, 8)}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+  } catch (err) {
+    console.error('Download failed:', err);
+    if (iosTab) iosTab.close();
+    alert('Failed to download media.');
+  }
+};
+
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -516,7 +540,7 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
               className="flex flex-col items-center text-slate-600 hover:text-slate-900 transition"
               title="Download"
             >
-              <span className="text-xs font-medium mb-1">Download Full Video!(May Not Work On Safari)</span>
+              <span className="text-xs font-medium mb-1"</span>
               <Download className="w-6 h-6" />
               <span className="text-xs mt-0.5">{downloadCount} {downloadCount === 1 ? 'download' : 'downloads'}</span>
             </button>
