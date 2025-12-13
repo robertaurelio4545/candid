@@ -240,16 +240,64 @@ const isIOS = () =>
   (navigator.userAgent.includes('Mac') && 'ontouchend' in document);
 
 const handleDownload = async () => {
-  if (!user) {
-    alert('Please sign in to download media');
-    return;
+  // 🔓 If post is NOT public, enforce Pro / admin rules
+  if (!isPublicPost) {
+    if (!user) {
+      alert('Please sign in to download media');
+      return;
+    }
+
+    if (!isProUser && !profile?.is_admin) {
+      alert('Upgrade to Pro to download media');
+      const upgradeBtn = document.querySelector('[data-upgrade-button]') as HTMLButtonElement;
+      upgradeBtn?.click();
+      return;
+    }
   }
 
-  if (!isProUser && !profile?.is_admin) {
-    alert('Upgrade to Pro to download media');
-    const upgradeBtn = document.querySelector('[data-upgrade-button]') as HTMLButtonElement;
-    upgradeBtn?.click();
-    return;
+  // 📱 iOS Safari user-gesture preservation
+  const ios =
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.userAgent.includes('Mac') && 'ontouchend' in document);
+
+  const iosTab = ios ? window.open('about:blank', '_blank') : null;
+
+  try {
+    // 📊 Track downloads ONLY if user exists
+    if (user) {
+      await supabase.from('downloads').insert({
+        post_id: post.id,
+        user_id: user.id,
+      });
+      setDownloadCount(prev => prev + 1);
+    }
+
+    // 🔗 Direct download link always wins
+    if (post.download_link && post.download_link.trim()) {
+      if (ios && iosTab) iosTab.location.href = post.download_link;
+      else window.open(post.download_link, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    const currentMediaUrl =
+      mediaItems.length > 0
+        ? mediaItems[currentMediaIndex].media_url
+        : post.media_url;
+
+    const currentMediaType =
+      mediaItems.length > 0
+        ? mediaItems[currentMediaIndex].media_type
+        : post.media_type;
+
+    // 🌍 PUBLIC POST: allow direct access for everyone
+    if (isPublicPost) {
+      if (ios && iosTab) iosTab.location.href = currentMediaUrl;
+      else window.open(currentMediaUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    // ⬇️ KEEP your existing Pro-only download logic BELOW this
+
   }
 
   // 🔐 Keep iOS user gesture alive
