@@ -179,12 +179,13 @@ const isProUser =
   (!profile.subscription_expires_at ||
     new Date(profile.subscription_expires_at) > new Date());
 
-// Public = visible_to_all true
+// 🔓 NEW: public post flag
 const isPublicPost = post.visible_to_all === true;
 
-// Only lock/overlay if the post is NOT public
+// 🔒 Only lock when NOT public
 const canViewLockedContent = isProUser || profile?.is_admin || isOwner;
 const shouldShowLockOverlay = !isPublicPost && !canViewLockedContent;
+
 
 
   const addWatermarkToImage = async (imageUrl: string): Promise<Blob> => {
