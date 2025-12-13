@@ -27,7 +27,7 @@ export default function CreatePost({ onClose, onPostCreated }: CreatePostProps) 
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const MAX_FILES = 5;
+  const MAX_FILES = 1;
 
   // Admin-only: Post as another user
   const [users, setUsers] = useState<Profile[]>([]);
