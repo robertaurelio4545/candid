@@ -173,9 +173,19 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
   };
 
   const isOwner = user?.id === post.user_id;
-  const isProUser = profile?.is_pro && (!profile.subscription_expires_at || new Date(profile.subscription_expires_at) > new Date());
-  const canViewLockedContent = isProUser || profile?.is_admin || isOwner;
-  const shouldShowLockOverlay = !canViewLockedContent;
+
+const isProUser =
+  profile?.is_pro &&
+  (!profile.subscription_expires_at ||
+    new Date(profile.subscription_expires_at) > new Date());
+
+// Public = visible_to_all true
+const isPublicPost = post.visible_to_all === true;
+
+// Only lock/overlay if the post is NOT public
+const canViewLockedContent = isProUser || profile?.is_admin || isOwner;
+const shouldShowLockOverlay = !isPublicPost && !canViewLockedContent;
+
 
   const addWatermarkToImage = async (imageUrl: string): Promise<Blob> => {
     return new Promise((resolve, reject) => {
