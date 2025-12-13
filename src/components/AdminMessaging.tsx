@@ -60,7 +60,6 @@ const loadAdminMessages = async () => {
   useEffect(() => {
     fetchUsers();
     fetchSentMessages();
-  }, []);
 loadAdminMessages();
 }, []);
   const fetchUsers = async () => {
