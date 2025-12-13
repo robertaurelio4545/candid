@@ -296,4 +296,3 @@ loadAdminMessages();
       </div>
     </div>
   );
-}
