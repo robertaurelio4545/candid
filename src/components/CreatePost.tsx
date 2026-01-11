@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { X, Upload, Image as ImageIcon, Video } from 'lucide-react';
-import { addWatermark } from '../utils/watermark';
 
 type CreatePostProps = {
   onClose: () => void;
@@ -12,7 +11,6 @@ type CreatePostProps = {
 export default function CreatePost({ onClose, onPostCreated }: CreatePostProps) {
   const { user } = useAuth();
   const [caption, setCaption] = useState('');
-  const [downloadUrl, setDownloadUrl] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [fileTypes, setFileTypes] = useState<string[]>([]);
@@ -32,7 +30,7 @@ export default function CreatePost({ onClose, onPostCreated }: CreatePostProps) 
     };
   }, [previews]);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || []);
     if (selectedFiles.length === 0) return;
 
@@ -58,11 +56,10 @@ export default function CreatePost({ onClose, onPostCreated }: CreatePostProps) 
         continue;
       }
 
-      const watermarkedFile = await addWatermark(file);
-      validFiles.push(watermarkedFile);
-      const objectUrl = URL.createObjectURL(watermarkedFile);
+      validFiles.push(file);
+      const objectUrl = URL.createObjectURL(file);
       newPreviews.push(objectUrl);
-      newFileTypes.push(watermarkedFile.type.startsWith('video/') ? 'video' : 'image');
+      newFileTypes.push(file.type.startsWith('video/') ? 'video' : 'image');
     }
 
     if (validFiles.length > 0) {
@@ -148,8 +145,6 @@ export default function CreatePost({ onClose, onPostCreated }: CreatePostProps) 
           caption: caption.trim(),
           media_url: uploadedUrls[0],
           media_type: fileTypes[0],
-          download_link: downloadUrl.trim() || null,
-          is_locked: true,
         })
         .select()
         .single();
@@ -287,21 +282,6 @@ export default function CreatePost({ onClose, onPostCreated }: CreatePostProps) 
               rows={3}
               className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:border-slate-500 focus:ring-2 focus:ring-slate-200 outline-none transition resize-none"
             />
-          </div>
-
-          <div>
-            <label htmlFor="downloadUrl" className="block text-sm font-medium text-slate-700 mb-2">
-              Download Link (Optional)
-            </label>
-            <input
-              id="downloadUrl"
-              type="url"
-              value={downloadUrl}
-              onChange={(e) => setDownloadUrl(e.target.value)}
-              placeholder="https://example.com/download"
-              className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:border-slate-500 focus:ring-2 focus:ring-slate-200 outline-none transition"
-            />
-            <p className="text-xs text-slate-500 mt-1">Pro subscribers will see this download link</p>
           </div>
 
 

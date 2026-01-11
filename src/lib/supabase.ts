@@ -24,7 +24,6 @@ export type Profile = {
   is_admin: boolean;
   is_pro: boolean;
   subscription_expires_at: string | null;
-  subscription_started_at: string | null;
   points: number;
   created_at: string;
   updated_at: string;

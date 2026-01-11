@@ -60,7 +60,7 @@ Deno.serve(async (req: Request) => {
 
     const origin = req.headers.get("origin") || "http://localhost:5173";
 
-    const sessionData: any = {
+    const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
         {
@@ -70,9 +70,9 @@ Deno.serve(async (req: Request) => {
               name: "Pro Subscription",
               description: "Access to all locked content",
             },
-            unit_amount: 1299,
+            unit_amount: 999,
             recurring: {
-              interval: "week",
+              interval: "month",
             },
           },
           quantity: 1,
@@ -85,10 +85,7 @@ Deno.serve(async (req: Request) => {
       metadata: {
         user_id: user.id,
       },
-      allow_promotion_codes: true,
-    };
-
-    const session = await stripe.checkout.sessions.create(sessionData);
+    });
 
     return new Response(
       JSON.stringify({ url: session.url }),

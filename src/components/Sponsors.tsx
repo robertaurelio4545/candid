@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { ExternalLink, Upload } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 
 type Sponsor = {
   id: string;
   spot_number: number;
   website_name: string;
   website_link: string;
-  logo_url?: string | null;
 };
 
 type SponsorRequestFormProps = {
@@ -18,26 +17,7 @@ type SponsorRequestFormProps = {
 function SponsorRequestForm({ onClose, onSubmit }: SponsorRequestFormProps) {
   const [websiteName, setWebsiteName] = useState('');
   const [websiteLink, setWebsiteLink] = useState('');
-  const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [uploading, setUploading] = useState(false);
-
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        alert('Logo must be less than 5MB');
-        return;
-      }
-      setLogoFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setLogoPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,46 +31,18 @@ function SponsorRequestForm({ onClose, onSubmit }: SponsorRequestFormProps) {
         return;
       }
 
-      let logoUrl = null;
-
-      if (logoFile) {
-        setUploading(true);
-        const fileExt = logoFile.name.split('.').pop();
-        const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-        const filePath = `sponsor-logos/${fileName}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('media')
-          .upload(filePath, logoFile);
-
-        if (uploadError) throw uploadError;
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('media')
-          .getPublicUrl(filePath);
-
-        logoUrl = publicUrl;
-        setUploading(false);
-      }
-
-      let formattedLink = websiteLink.trim();
-      if (!formattedLink.startsWith('http://') && !formattedLink.startsWith('https://')) {
-        formattedLink = 'https://' + formattedLink;
-      }
-
       const { error } = await supabase
         .from('sponsor_requests')
         .insert({
           user_id: user.id,
           website_name: websiteName.trim(),
-          website_link: formattedLink,
-          logo_url: logoUrl,
+          website_link: websiteLink.trim(),
           status: 'pending'
         });
 
       if (error) throw error;
 
-      alert('Sponsor request submitted successfully! An admin will review it shortly.');
+      alert('Sponsor request submitted successfully! An admin will review it soon.');
       onSubmit();
       onClose();
     } catch (err) {
@@ -98,7 +50,6 @@ function SponsorRequestForm({ onClose, onSubmit }: SponsorRequestFormProps) {
       alert('Failed to submit sponsor request. Please try again.');
     } finally {
       setSubmitting(false);
-      setUploading(false);
     }
   };
 
@@ -130,54 +81,13 @@ function SponsorRequestForm({ onClose, onSubmit }: SponsorRequestFormProps) {
               Website Link
             </label>
             <input
-              type="text"
+              type="url"
               value={websiteLink}
               onChange={(e) => setWebsiteLink(e.target.value)}
-              placeholder="example.com"
+              placeholder="https://example.com"
               className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent"
               required
             />
-            <p className="text-xs text-slate-500 mt-1">https:// will be added automatically</p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Logo (optional)
-            </label>
-            <div className="flex items-center gap-4">
-              {logoPreview ? (
-                <div className="relative">
-                  <img
-                    src={logoPreview}
-                    alt="Logo preview"
-                    className="w-20 h-20 object-contain border border-slate-300 rounded-lg"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLogoFile(null);
-                      setLogoPreview(null);
-                    }}
-                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600 transition"
-                  >
-                    ×
-                  </button>
-                </div>
-              ) : (
-                <label className="w-20 h-20 border-2 border-dashed border-slate-300 rounded-lg flex items-center justify-center cursor-pointer hover:border-slate-400 transition">
-                  <Upload className="w-6 h-6 text-slate-400" />
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleLogoChange}
-                    className="hidden"
-                  />
-                </label>
-              )}
-              <div className="flex-1 text-sm text-slate-600">
-                Upload a logo for your sponsor spot. Max 5MB.
-              </div>
-            </div>
           </div>
 
           <div className="flex gap-3 pt-4">
@@ -191,10 +101,10 @@ function SponsorRequestForm({ onClose, onSubmit }: SponsorRequestFormProps) {
             </button>
             <button
               type="submit"
-              disabled={submitting || uploading}
+              disabled={submitting}
               className="flex-1 px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition disabled:opacity-50"
             >
-              {uploading ? 'Uploading...' : submitting ? 'Submitting...' : 'Submit Request'}
+              {submitting ? 'Submitting...' : 'Submit Request'}
             </button>
           </div>
         </form>
@@ -263,17 +173,9 @@ export default function Sponsors() {
                   href={sponsor.website_link}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex flex-col items-center gap-2 text-center group w-full"
+                  className="flex flex-col items-center gap-2 text-center group"
                 >
-                  {sponsor.logo_url ? (
-                    <img
-                      src={sponsor.logo_url}
-                      alt={sponsor.website_name}
-                      className="w-16 h-16 object-contain"
-                    />
-                  ) : (
-                    <ExternalLink className="w-6 h-6 text-slate-600 group-hover:text-slate-900 transition" />
-                  )}
+                  <ExternalLink className="w-6 h-6 text-slate-600 group-hover:text-slate-900 transition" />
                   <span className="text-xs font-medium text-slate-700 group-hover:text-slate-900 line-clamp-2">
                     {sponsor.website_name}
                   </span>

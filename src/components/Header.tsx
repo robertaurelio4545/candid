@@ -1,7 +1,6 @@
 import { PlusSquare, User, LogOut, Shield, Crown, Trophy, Inbox as InboxIcon } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
 type HeaderProps = {
@@ -14,7 +13,6 @@ type HeaderProps = {
 
 export default function Header({ onCreatePost, onShowProfile, onShowAdmin, onUpgrade, onShowInbox }: HeaderProps) {
   const { signOut, isAdmin, profile } = useAuth();
-  const navigate = useNavigate();
   const [proCount, setProCount] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -52,21 +50,14 @@ export default function Header({ onCreatePost, onShowProfile, onShowAdmin, onUpg
   const loadUnreadCount = async () => {
     if (!profile) return;
 
-    const { count: adminCount } = await supabase
+    const { count } = await supabase
       .from('admin_messages')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', profile.id)
       .eq('status', 'unread');
 
-    const { count: userCount } = await supabase
-      .from('user_messages')
-      .select('*', { count: 'exact', head: true })
-      .eq('recipient_id', profile.id)
-      .eq('read', false);
-
-    setUnreadCount((adminCount || 0) + (userCount || 0));
+    setUnreadCount(count || 0);
   };
-
 
   return (
     <header className="sticky top-0 bg-white border-b border-slate-200 z-40">
@@ -75,8 +66,7 @@ export default function Header({ onCreatePost, onShowProfile, onShowAdmin, onUpg
           <img
             src="/Untitled design.png"
             alt="CandidTeenPro Logo"
-            className="h-24 w-auto cursor-pointer"
-            onClick={() => navigate('/')}
+            className="h-24 w-auto"
           />
           {isAdmin && (
             <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-yellow-50 to-yellow-100 border border-yellow-200 rounded-lg">

@@ -159,8 +159,8 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
 
   const isOwner = user?.id === post.user_id;
   const isProUser = profile?.is_pro && (!profile.subscription_expires_at || new Date(profile.subscription_expires_at) > new Date());
-  const canViewLockedContent = isProUser || profile?.is_admin || isOwner;
-  const shouldShowLockOverlay = !canViewLockedContent;
+  const canViewLockedContent = isProUser || profile?.is_admin || isOwner || post.visible_to_all;
+  const shouldShowLockOverlay = post.is_locked && !canViewLockedContent;
 
   const handleDownload = async () => {
     if (!user) {
@@ -168,11 +168,35 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
       return;
     }
 
-    if (!isProUser && !profile?.is_admin) {
-      alert('Upgrade to Pro to download media');
-      const upgradeBtn = document.querySelector('[data-upgrade-button]') as HTMLButtonElement;
-      upgradeBtn?.click();
-      return;
+    if (!profile?.is_pro) {
+      const currentPoints = profile?.points || 0;
+      if (currentPoints < 100) {
+        alert(`You need 100 points to download. You currently have ${currentPoints} points. Create more posts to earn points!`);
+        return;
+      }
+
+      const confirmDownload = window.confirm('This download will cost 100 points. Do you want to continue?');
+      if (!confirmDownload) {
+        return;
+      }
+
+      try {
+        const { data: deductSuccess, error: deductError } = await supabase.rpc('deduct_user_points', {
+          user_id: user.id,
+          points_to_deduct: 100
+        });
+
+        if (deductError) throw deductError;
+
+        if (!deductSuccess) {
+          alert('Insufficient points for download');
+          return;
+        }
+      } catch (err) {
+        console.error('Error deducting points:', err);
+        alert('Failed to process points. Please try again.');
+        return;
+      }
     }
 
     try {
@@ -226,46 +250,33 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-      {isModal && (
-        <div className="p-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-400 to-slate-600 flex items-center justify-center text-white font-semibold">
-              {post.profiles?.username?.charAt(0).toUpperCase() || 'U'}
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!isOwner && onMessageUser && post.user_id) {
-                      onMessageUser(post.user_id, post.profiles?.username || 'Unknown');
-                    }
-                  }}
-                  className={`font-semibold text-slate-900 ${!isOwner ? 'hover:underline cursor-pointer' : ''}`}
-                  disabled={isOwner}
-                >
-                  {post.profiles?.username || 'Unknown'}
-                </button>
-                {post.profiles?.is_pro && (
-                  <Crown className="w-4 h-4 text-yellow-500" />
-                )}
-              </div>
-              <p className="text-xs text-slate-500">{formatDate(post.created_at)}</p>
-            </div>
+      <div className="p-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-400 to-slate-600 flex items-center justify-center text-white font-semibold">
+            {post.profiles?.username?.charAt(0).toUpperCase() || 'U'}
           </div>
-          {isOwner && (
-            <button
-              onClick={handleDelete}
-              disabled={deleting}
-              className="text-slate-400 hover:text-red-500 transition disabled:opacity-50"
-            >
-              <Trash2 className="w-5 h-5" />
-            </button>
-          )}
+          <div>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!isOwner && onMessageUser && post.user_id) {
+                    onMessageUser(post.user_id, post.profiles?.username || 'Unknown');
+                  }
+                }}
+                className={`font-semibold text-slate-900 ${!isOwner ? 'hover:underline cursor-pointer' : ''}`}
+                disabled={isOwner}
+              >
+                {post.profiles?.username || 'Unknown'}
+              </button>
+              {post.profiles?.is_pro && (
+                <Crown className="w-4 h-4 text-yellow-500" />
+              )}
+            </div>
+            <p className="text-xs text-slate-500">{formatDate(post.created_at)}</p>
+          </div>
         </div>
-      )}
-      {!isModal && isOwner && (
-        <div className="p-4 flex items-center justify-end">
+        {isOwner && (
           <button
             onClick={handleDelete}
             disabled={deleting}
@@ -273,8 +284,8 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
           >
             <Trash2 className="w-5 h-5" />
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       <div
         className="bg-slate-50 relative cursor-pointer"
@@ -362,7 +373,7 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
               }}
               className="px-8 py-3 bg-gradient-to-r from-yellow-400 to-yellow-600 text-white rounded-lg hover:from-yellow-500 hover:to-yellow-700 transition font-semibold shadow-xl"
             >
-              {user ? 'Upgrade for $12.99/week' : 'Sign In to Upgrade'}
+              {user ? 'Upgrade for $9.99/month' : 'Sign In to Upgrade'}
             </button>
           </div>
         )}
@@ -382,16 +393,21 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
           >
             <MessageCircle className="w-6 h-6" />
           </button>
-          <div className="ml-auto flex items-center gap-2">
-            <button
-              onClick={handleDownload}
-              className="flex flex-col items-center text-slate-600 hover:text-slate-900 transition"
-              title="Download"
-            >
-              <Download className="w-6 h-6" />
-              <span className="text-xs mt-0.5">Download Video</span>
-            </button>
-          </div>
+          {((mediaItems.length > 0 && mediaItems.some(m => m.media_type === 'video')) ||
+            post.media_type === 'video') && (
+            <div className="ml-auto flex items-center gap-2">
+              {!profile?.is_pro && (
+                <span className="text-xs text-slate-600 font-medium">100 pts</span>
+              )}
+              <button
+                onClick={handleDownload}
+                className="text-slate-600 hover:text-slate-900 transition"
+                title={profile?.is_pro ? "Download" : "Download (100 points)"}
+              >
+                <Download className="w-6 h-6" />
+              </button>
+            </div>
+          )}
         </div>
 
         {likeCount > 0 && (
@@ -400,7 +416,7 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
           </p>
         )}
 
-        {isModal && post.caption && (
+        {post.caption && (
           <p className="text-slate-900 mb-2">
             <span className="inline-flex items-center gap-1 mr-2">
               <span className="font-semibold">{post.profiles?.username}</span>
@@ -455,14 +471,12 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
                   return sortedComments.map((comment) => (
                     <div key={comment.id} className="text-sm flex items-start justify-between gap-2">
                       <div className="flex-1">
-                        {isModal && (
-                          <div className="inline-flex items-center gap-1 mr-2">
-                            <span className="font-semibold">{comment.profiles?.username}</span>
-                            {comment.profiles?.is_pro && (
-                              <Crown className="w-3 h-3 text-yellow-500" />
-                            )}
-                          </div>
-                        )}
+                        <div className="inline-flex items-center gap-1 mr-2">
+                          <span className="font-semibold">{comment.profiles?.username}</span>
+                          {comment.profiles?.is_pro && (
+                            <Crown className="w-3 h-3 text-yellow-500" />
+                          )}
+                        </div>
                         <span
                           className="text-slate-900"
                           dangerouslySetInnerHTML={{ __html: linkify(comment.content) }}

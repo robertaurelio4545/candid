@@ -115,6 +115,19 @@ export default function Feed({ isAuthenticated, onLoginClick, onMessageUser }: F
                   className="w-full h-auto object-cover"
                 />
               )}
+              <div className="p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-slate-400 to-slate-600 flex items-center justify-center text-white text-xs font-semibold">
+                    {post.profiles?.username?.charAt(0).toUpperCase() || 'U'}
+                  </div>
+                  <span className="text-sm font-semibold text-slate-900 truncate">
+                    {post.profiles?.username || 'Unknown'}
+                  </span>
+                </div>
+                {post.caption && (
+                  <p className="text-xs text-slate-600 line-clamp-2">{post.caption}</p>
+                )}
+              </div>
             </div>
           </div>
         ))}
