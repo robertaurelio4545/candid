@@ -23,6 +23,7 @@ export default function Profile({ onClose }: ProfileProps) {
   const [canceling, setCanceling] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [redeeming, setRedeeming] = useState(false);
+  const [activeTab, setActiveTab] = useState<'posts'>('posts');
 
   useEffect(() => {
     if (user) {
@@ -83,6 +84,7 @@ export default function Profile({ onClose }: ProfileProps) {
       console.error('Error fetching posts:', err);
     }
   };
+
 
   const handleSave = async () => {
     if (!user) return;
@@ -393,9 +395,13 @@ export default function Profile({ onClose }: ProfileProps) {
           </div>
 
           <div className="border-t border-slate-200 pt-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Grid className="w-5 h-5 text-slate-600" />
-              <h4 className="font-semibold text-slate-900">Posts</h4>
+            <div className="flex gap-2 mb-6 border-b border-slate-200">
+              <div className="px-4 py-2 font-medium text-slate-900 border-b-2 border-slate-900">
+                <div className="flex items-center gap-2">
+                  <Grid className="w-5 h-5" />
+                  Posts
+                </div>
+              </div>
             </div>
 
             {posts.length === 0 ? (

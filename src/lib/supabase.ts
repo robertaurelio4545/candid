@@ -13,6 +13,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       'x-client-info': 'supabase-js-web',
     },
   },
+  db: {
+    schema: 'public',
+  },
 });
 
 export type Profile = {
@@ -89,4 +92,11 @@ export type Post = {
   post_media?: PostMedia[];
   like_count?: number;
   user_has_liked?: boolean;
+};
+
+export type Follow = {
+  id: string;
+  follower_id: string;
+  following_id: string;
+  created_at: string;
 };

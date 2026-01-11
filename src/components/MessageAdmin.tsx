@@ -18,11 +18,14 @@ export default function MessageAdmin({ onClose }: MessageAdminProps) {
     setSending(true);
     try {
       const { error } = await supabase
-        .from('admin_messages')
-        .insert({
-          user_id: user.id,
-          message: message.trim(),
-        });
+  .from('admin_messages')
+  .insert({
+    user_id: user.id,        // conversation owner
+    created_by: user.id,     // sender
+    from_admin: false,       // USER → ADMIN
+    message: message.trim(),
+  });
+
 
       if (error) throw error;
 

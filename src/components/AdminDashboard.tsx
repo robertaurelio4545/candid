@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, Post, Profile, AdminAction } from '../lib/supabase';
-import { X, Trash2, Shield, Users, Image as ImageIcon, Activity, Lock, Unlock, Trophy, Search, Crown, MessageSquare, Send, ExternalLink, CheckCircle, XCircle, Link, Mail } from 'lucide-react';
+import { X, Trash2, Shield, Users, Image as ImageIcon, Activity, Lock, Unlock, Trophy, Search, Crown, MessageSquare, Send, ExternalLink, CheckCircle, XCircle, Link, Mail, Flag, AlertTriangle } from 'lucide-react';
 import PostCard from './PostCard';
 import AdminMessaging from './AdminMessaging';
 
@@ -44,7 +44,7 @@ type UserToUserMessage = {
 type CombinedMessage = AdminMessage | UserToUserMessage;
 
 export default function AdminDashboard({ onClose }: AdminDashboardProps) {
-  const [activeTab, setActiveTab] = useState<'posts' | 'users' | 'logs' | 'messages' | 'sponsors' | 'cancellations'>('posts');
+  const [activeTab, setActiveTab] = useState<'posts' | 'users' | 'logs' | 'messages' | 'sponsors' | 'cancellations' | 'inbox' | 'reports'>('posts');
   const [posts, setPosts] = useState<Post[]>([]);
   const [users, setUsers] = useState<Profile[]>([]);
   const [logs, setLogs] = useState<AdminAction[]>([]);
@@ -72,6 +72,7 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
   const [newPromoMaxUses, setNewPromoMaxUses] = useState('');
   const [creatingPromo, setCreatingPromo] = useState(false);
   const [cancellations, setCancellations] = useState<any[]>([]);
+  const [reports, setReports] = useState<any[]>([]);
 
   useEffect(() => {
     fetchData();
@@ -94,6 +95,8 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
         await fetchPromoCodes();
       } else if (activeTab === 'cancellations') {
         await fetchCancellations();
+      } else if (activeTab === 'reports') {
+        await fetchReports();
       }
       await fetchStats();
     } catch (err) {
@@ -719,6 +722,58 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
     }
   };
 
+  const fetchReports = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('post_reports')
+        .select(`
+          *,
+          post:posts(id, caption, media_url, media_type, user_id, profiles:profiles(username, avatar_url)),
+          reporter:profiles!post_reports_reporter_id_fkey(username, avatar_url),
+          reviewer:profiles!post_reports_reviewed_by_fkey(username)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setReports(data || []);
+    } catch (err) {
+      console.error('Error fetching reports:', err);
+    }
+  };
+
+  const handleUpdateReportStatus = async (reportId: string, status: string, postId?: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('post_reports')
+        .update({
+          status,
+          reviewed_by: user.id,
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq('id', reportId);
+
+      if (error) throw error;
+
+      if (status === 'removed' && postId) {
+        const { error: deleteError } = await supabase
+          .from('posts')
+          .delete()
+          .eq('id', postId);
+
+        if (deleteError) throw deleteError;
+      }
+
+      await fetchReports();
+      alert(`Report ${status} successfully`);
+    } catch (err: any) {
+      console.error('Error updating report:', err);
+      alert(err.message || 'Failed to update report');
+    }
+  };
+
   const handleCreatePromoCode = async () => {
     if (!newPromoCode.trim() || !newPromoDiscount) {
       alert('Please enter a promo code and discount percentage');
@@ -952,6 +1007,34 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
               }`}
             >
               Cancellations
+            </button>
+            <button
+              onClick={() => setActiveTab('inbox')}
+              className={`px-4 py-2 font-medium transition ${
+                activeTab === 'inbox'
+                  ? 'text-slate-900 border-b-2 border-slate-900'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Email Inbox
+            </button>
+            <button
+              onClick={() => setActiveTab('reports')}
+              className={`px-4 py-2 font-medium transition relative ${
+                activeTab === 'reports'
+                  ? 'text-slate-900 border-b-2 border-slate-900'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Flag className="w-4 h-4" />
+                Reports
+                {reports.filter(r => r.status === 'pending').length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">
+                    {reports.filter(r => r.status === 'pending').length}
+                  </span>
+                )}
+              </div>
             </button>
           </div>
 
@@ -1651,6 +1734,180 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
                       <XCircle className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                       <p className="text-slate-600">No cancellations yet</p>
                     </div>
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'inbox' && (
+                <div className="space-y-4">
+                  <div className="bg-slate-50 rounded-lg p-6">
+                    <div className="flex items-center gap-3 mb-4">
+                      <Mail className="w-6 h-6 text-slate-900" />
+                      <h3 className="text-lg font-semibold text-slate-900">Admin Email Inbox</h3>
+                    </div>
+                    <div className="bg-white border border-slate-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="font-semibold text-slate-900">Email Address:</span>
+                        <a
+                          href="mailto:admin@candidteenpro.com"
+                          className="text-slate-900 font-mono text-sm hover:text-blue-600 hover:underline transition"
+                        >
+                          admin@candidteenpro.com
+                        </a>
+                      </div>
+                      <div className="border-t border-slate-200 pt-3">
+                        <p className="text-sm text-slate-600 mb-2">
+                          This is your primary contact email for:
+                        </p>
+                        <ul className="text-sm text-slate-600 space-y-1 list-disc list-inside">
+                          <li>General inquiries and support requests</li>
+                          <li>Business partnerships and sponsorships</li>
+                          <li>Legal compliance and takedown requests</li>
+                          <li>User feedback and suggestions</li>
+                        </ul>
+                      </div>
+                      <div className="mt-4 pt-3 border-t border-slate-200">
+                        <p className="text-xs text-slate-500">
+                          Access your email inbox through your email provider dashboard.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex gap-3">
+                      <Mail className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                      <div className="text-sm text-blue-900">
+                        <p className="font-semibold mb-1">Email Configuration</p>
+                        <p className="text-blue-800">
+                          Configure this email with your domain provider (e.g., Google Workspace, Microsoft 365, or your hosting provider's email service).
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'reports' && (
+                <div className="space-y-4">
+                  {reports.length === 0 ? (
+                    <div className="text-center py-12 bg-slate-50 rounded-lg">
+                      <Flag className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                      <p className="text-slate-600">No reports submitted yet</p>
+                    </div>
+                  ) : (
+                    reports.map((report) => (
+                      <div key={report.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                        <div className="p-6">
+                          <div className="flex items-start justify-between mb-4">
+                            <div className="flex items-start gap-4 flex-1">
+                              <div className={`p-3 rounded-lg ${
+                                report.status === 'pending' ? 'bg-yellow-50' :
+                                report.status === 'reviewed' ? 'bg-blue-50' :
+                                report.status === 'removed' ? 'bg-red-50' :
+                                'bg-slate-50'
+                              }`}>
+                                <AlertTriangle className={`w-6 h-6 ${
+                                  report.status === 'pending' ? 'text-yellow-600' :
+                                  report.status === 'reviewed' ? 'text-blue-600' :
+                                  report.status === 'removed' ? 'text-red-600' :
+                                  'text-slate-600'
+                                }`} />
+                              </div>
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className={`text-xs font-semibold px-2 py-1 rounded ${
+                                    report.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                    report.status === 'reviewed' ? 'bg-blue-100 text-blue-800' :
+                                    report.status === 'removed' ? 'bg-red-100 text-red-800' :
+                                    'bg-slate-100 text-slate-800'
+                                  }`}>
+                                    {report.status.toUpperCase()}
+                                  </span>
+                                  <span className="text-xs text-slate-500">
+                                    {new Date(report.created_at).toLocaleString()}
+                                  </span>
+                                </div>
+                                <h3 className="font-semibold text-slate-900 mb-2">{report.reason}</h3>
+                                {report.details && (
+                                  <p className="text-sm text-slate-600 mb-3">{report.details}</p>
+                                )}
+                                <div className="flex items-center gap-4 text-sm text-slate-600">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium">Reporter:</span>
+                                    <span>{report.reporter?.username || 'Unknown'}</span>
+                                  </div>
+                                  {report.reviewed_by && report.reviewer && (
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-medium">Reviewed by:</span>
+                                      <span>{report.reviewer.username}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {report.post && (
+                            <div className="border-t border-slate-200 pt-4 mt-4">
+                              <p className="text-sm font-medium text-slate-700 mb-3">Reported Post:</p>
+                              <div className="bg-slate-50 rounded-lg p-4">
+                                <div className="flex items-start gap-4">
+                                  {report.post.media_type === 'video' ? (
+                                    <video
+                                      src={report.post.media_url}
+                                      className="w-32 h-32 object-cover rounded-lg"
+                                    />
+                                  ) : (
+                                    <img
+                                      src={report.post.media_url}
+                                      alt="Reported content"
+                                      className="w-32 h-32 object-cover rounded-lg"
+                                    />
+                                  )}
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="font-semibold text-slate-900">
+                                        {report.post.profiles?.username || 'Unknown'}
+                                      </span>
+                                    </div>
+                                    {report.post.caption && (
+                                      <p className="text-sm text-slate-600 line-clamp-2">{report.post.caption}</p>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {report.status === 'pending' && (
+                            <div className="flex gap-2 mt-4 pt-4 border-t border-slate-200">
+                              <button
+                                onClick={() => handleUpdateReportStatus(report.id, 'reviewed')}
+                                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+                              >
+                                Mark as Reviewed
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (confirm('Are you sure you want to remove this post? This action cannot be undone.')) {
+                                    handleUpdateReportStatus(report.id, 'removed', report.post_id);
+                                  }
+                                }}
+                                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium"
+                              >
+                                Remove Post
+                              </button>
+                              <button
+                                onClick={() => handleUpdateReportStatus(report.id, 'dismissed')}
+                                className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition font-medium"
+                              >
+                                Dismiss Report
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))
                   )}
                 </div>
               )}
