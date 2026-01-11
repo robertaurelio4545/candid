@@ -45,7 +45,7 @@ Deno.serve(async (req: Request) => {
       const ffmpegCommand = new Deno.Command("ffmpeg", {
         args: [
           "-i", inputPath,
-"-vf", "drawtext=text='candidteenpro.com':fontcolor=red:fontsize=48:x=(w-text_w)/2:y=(h-text_h)/2:borderw=3:bordercolor=black:fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+          "-vf", "drawtext=text='candidteenpro.com':fontcolor=red:fontsize=48:x=(w-text_w)/2:y=(h-text_h)/2:borderw=3:bordercolor=black:fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
           "-codec:a", "copy",
           "-preset", "ultrafast",
           "-y",
