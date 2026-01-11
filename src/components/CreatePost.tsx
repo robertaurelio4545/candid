@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { X, Upload, Image as ImageIcon, Video } from 'lucide-react';
+import { addWatermark } from '../utils/watermark';
 
 type CreatePostProps = {
   onClose: () => void;
@@ -31,7 +32,7 @@ export default function CreatePost({ onClose, onPostCreated }: CreatePostProps) 
     };
   }, [previews]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || []);
     if (selectedFiles.length === 0) return;
 
@@ -57,10 +58,11 @@ export default function CreatePost({ onClose, onPostCreated }: CreatePostProps) 
         continue;
       }
 
-      validFiles.push(file);
-      const objectUrl = URL.createObjectURL(file);
+      const watermarkedFile = await addWatermark(file);
+      validFiles.push(watermarkedFile);
+      const objectUrl = URL.createObjectURL(watermarkedFile);
       newPreviews.push(objectUrl);
-      newFileTypes.push(file.type.startsWith('video/') ? 'video' : 'image');
+      newFileTypes.push(watermarkedFile.type.startsWith('video/') ? 'video' : 'image');
     }
 
     if (validFiles.length > 0) {
