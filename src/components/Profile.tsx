@@ -9,7 +9,7 @@ type ProfileProps = {
 };
 
 export default function Profile({ onClose }: ProfileProps) {
-  const { user } = useAuth();
+  const { user, refreshProfile: refreshAuthProfile } = useAuth();
   const [profile, setProfile] = useState<ProfileType | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,6 +22,8 @@ export default function Profile({ onClose }: ProfileProps) {
   const [uploading, setUploading] = useState(false);
   const [canceling, setCanceling] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [redeeming, setRedeeming] = useState(false);
+  const [activeTab, setActiveTab] = useState<'posts'>('posts');
 
   useEffect(() => {
     if (user) {
@@ -82,6 +84,7 @@ export default function Profile({ onClose }: ProfileProps) {
       console.error('Error fetching posts:', err);
     }
   };
+
 
   const handleSave = async () => {
     if (!user) return;
@@ -146,6 +149,40 @@ export default function Profile({ onClose }: ProfileProps) {
     }
   };
 
+  const handleRedeemPoints = async () => {
+    if (!user || !profile) return;
+
+    const currentPoints = profile.points || 0;
+    if (currentPoints < 200) {
+      alert(`You need 200 points to redeem 1 month of Pro. You currently have ${currentPoints} points.`);
+      return;
+    }
+
+    const confirm = window.confirm('Redeem 200 points for 1 month of Pro membership?');
+    if (!confirm) return;
+
+    setRedeeming(true);
+    try {
+      const { data, error } = await supabase.rpc('redeem_points_for_pro');
+
+      if (error) throw error;
+
+      if (data && !data.success) {
+        alert(data.error || 'Failed to redeem points');
+        return;
+      }
+
+      await fetchProfile();
+      await refreshAuthProfile();
+      alert('Successfully redeemed 200 points for 1 month of Pro membership!');
+    } catch (err: any) {
+      console.error('Error redeeming points:', err);
+      alert(err.message || 'Failed to redeem points');
+    } finally {
+      setRedeeming(false);
+    }
+  };
+
   const handleCancelSubscription = async () => {
     if (!user) return;
 
@@ -171,8 +208,13 @@ export default function Profile({ onClose }: ProfileProps) {
       }
 
       await fetchProfile();
+      await refreshAuthProfile();
       setShowCancelConfirm(false);
       alert('Your Pro subscription has been cancelled. You will not be charged again.');
+
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
     } catch (err: any) {
       alert(err.message || 'Failed to cancel subscription');
     } finally {
@@ -308,7 +350,7 @@ export default function Profile({ onClose }: ProfileProps) {
                   {profile?.full_name && (
                     <p className="text-slate-600 mb-2">{profile.full_name}</p>
                   )}
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
                     <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
                       <Trophy className="w-4 h-4 text-amber-600" />
                       <span className="text-sm font-semibold text-amber-900">{profile?.points || 0} points</span>
@@ -318,6 +360,16 @@ export default function Profile({ onClose }: ProfileProps) {
                         <Crown className="w-4 h-4 text-yellow-600" />
                         <span className="text-sm font-semibold text-yellow-900">Pro Member</span>
                       </div>
+                    )}
+                    {!profile?.is_pro && (profile?.points || 0) >= 200 && (
+                      <button
+                        onClick={handleRedeemPoints}
+                        disabled={redeeming}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition font-semibold text-sm shadow-md disabled:opacity-50"
+                      >
+                        <Crown className="w-4 h-4" />
+                        {redeeming ? 'Redeeming...' : 'Redeem 200pts for Pro'}
+                      </button>
                     )}
                   </div>
                   {profile?.is_pro && (
@@ -343,9 +395,13 @@ export default function Profile({ onClose }: ProfileProps) {
           </div>
 
           <div className="border-t border-slate-200 pt-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Grid className="w-5 h-5 text-slate-600" />
-              <h4 className="font-semibold text-slate-900">Posts</h4>
+            <div className="flex gap-2 mb-6 border-b border-slate-200">
+              <div className="px-4 py-2 font-medium text-slate-900 border-b-2 border-slate-900">
+                <div className="flex items-center gap-2">
+                  <Grid className="w-5 h-5" />
+                  Posts
+                </div>
+              </div>
             </div>
 
             {posts.length === 0 ? (

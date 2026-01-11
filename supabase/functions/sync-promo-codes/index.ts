@@ -43,55 +43,74 @@ Deno.serve(async (req: Request) => {
       throw new Error("No authenticated user found");
     }
 
+    const { data: profile } = await supabaseClient
+      .from("profiles")
+      .select("is_admin")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (!profile?.is_admin) {
+      throw new Error("Unauthorized: Admin access required");
+    }
+
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) {
-      return new Response(
-        JSON.stringify({ error: "Stripe is not configured. Please contact support." }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      throw new Error("Stripe is not configured");
     }
 
     const stripe = new Stripe(stripeKey, {
       apiVersion: "2023-10-16",
     });
 
-    const origin = req.headers.get("origin") || "http://localhost:5173";
+    const { data: promoCodes, error: promoError } = await supabaseClient
+      .from("promo_codes")
+      .select("*")
+      .eq("is_active", true);
 
-    const sessionData: any = {
-      payment_method_types: ["card"],
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: "Pro Subscription",
-              description: "Access to all locked content",
-            },
-            unit_amount: 1299,
-            recurring: {
-              interval: "week",
-            },
-          },
-          quantity: 1,
-        },
-      ],
-      mode: "subscription",
-      success_url: `${origin}?success=true`,
-      cancel_url: `${origin}?canceled=true`,
-      client_reference_id: user.id,
-      metadata: {
-        user_id: user.id,
-      },
-      allow_promotion_codes: true,
-    };
+    if (promoError) {
+      throw new Error(`Failed to fetch promo codes: ${promoError.message}`);
+    }
 
-    const session = await stripe.checkout.sessions.create(sessionData);
+    const results = [];
+
+    for (const promo of promoCodes || []) {
+      try {
+        const coupon = await stripe.coupons.create({
+          percent_off: promo.discount_percent,
+          duration: "forever",
+          name: `${promo.discount_percent}% off`,
+        });
+
+        const promotionCode = await stripe.promotionCodes.create({
+          coupon: coupon.id,
+          code: promo.code.toUpperCase(),
+          max_redemptions: promo.max_uses || undefined,
+        });
+
+        results.push({
+          code: promo.code,
+          status: "created",
+          couponId: coupon.id,
+          promotionCodeId: promotionCode.id,
+        });
+      } catch (error: any) {
+        if (error.code === "resource_already_exists") {
+          results.push({
+            code: promo.code,
+            status: "already_exists",
+          });
+        } else {
+          results.push({
+            code: promo.code,
+            status: "error",
+            error: error.message,
+          });
+        }
+      }
+    }
 
     return new Response(
-      JSON.stringify({ url: session.url }),
+      JSON.stringify({ success: true, results }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,

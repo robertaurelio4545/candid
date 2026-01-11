@@ -8,6 +8,24 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+function calculateDuration(start: Date, end: Date): string {
+  const diffMs = end.getTime() - start.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 7) {
+    return `${diffDays} day${diffDays !== 1 ? 's' : ''}`;
+  } else if (diffDays < 30) {
+    const weeks = Math.floor(diffDays / 7);
+    return `${weeks} week${weeks !== 1 ? 's' : ''}`;
+  } else if (diffDays < 365) {
+    const months = Math.floor(diffDays / 30);
+    return `${months} month${months !== 1 ? 's' : ''}`;
+  } else {
+    const years = Math.floor(diffDays / 365);
+    return `${years} year${years !== 1 ? 's' : ''}`;
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -45,7 +63,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: profile, error: profileError } = await supabaseClient
       .from("profiles")
-      .select("stripe_subscription_id, is_pro")
+      .select("stripe_subscription_id, is_pro, username, subscription_started_at")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -74,7 +92,14 @@ Deno.serve(async (req: Request) => {
       apiVersion: "2023-10-16",
     });
 
-    await stripe.subscriptions.cancel(profile.stripe_subscription_id);
+    try {
+      await stripe.subscriptions.cancel(profile.stripe_subscription_id);
+    } catch (stripeError: any) {
+      console.error("Stripe cancellation error:", stripeError.message);
+      if (!stripeError.message.includes("No such subscription")) {
+        throw stripeError;
+      }
+    }
 
     const { error: updateError } = await supabaseClient
       .from("profiles")
@@ -88,6 +113,28 @@ Deno.serve(async (req: Request) => {
     if (updateError) {
       throw new Error(`Update error: ${updateError.message}`);
     }
+
+    const username = profile.username || "Unknown User";
+
+    const subscriptionDuration = profile.subscription_started_at
+      ? calculateDuration(new Date(profile.subscription_started_at), new Date())
+      : "Unknown";
+
+    await supabaseClient
+      .from("cancellations")
+      .insert({
+        user_id: user.id,
+        username: username,
+        cancelled_at: new Date().toISOString(),
+        subscription_duration: subscriptionDuration,
+      });
+
+    await supabaseClient
+      .from("admin_messages")
+      .insert({
+        message: `User ${username} has cancelled their Pro subscription`,
+        created_at: new Date().toISOString(),
+      });
 
     return new Response(
       JSON.stringify({ success: true, message: "Subscription cancelled successfully" }),

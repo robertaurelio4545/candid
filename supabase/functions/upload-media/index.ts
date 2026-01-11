@@ -3,7 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
@@ -18,34 +18,19 @@ Deno.serve(async (req: Request) => {
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "No authorization header" }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      throw new Error("No authorization header");
     }
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      {
-        global: {
-          headers: { Authorization: authHeader },
-        },
-      }
-    );
+    const token = authHeader.replace("Bearer ", "");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    // Verify the user
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
     if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      throw new Error("Unauthorized");
     }
 
     const formData = await req.formData();
@@ -53,52 +38,57 @@ Deno.serve(async (req: Request) => {
     const fileName = formData.get("fileName") as string;
 
     if (!file || !fileName) {
-      return new Response(
-        JSON.stringify({ error: "Missing file or fileName" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      throw new Error("File and fileName are required");
     }
 
+    console.log(`Uploading ${fileName} (${file.size} bytes, ${file.type})`);
+
+    // Upload directly using the REST API for better control
+    const uploadUrl = `${supabaseUrl}/storage/v1/object/media/${fileName}`;
     const fileBuffer = await file.arrayBuffer();
-    const fileBlob = new Blob([fileBuffer], { type: file.type });
+    
+    const uploadResponse = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${supabaseServiceKey}`,
+        'Content-Type': file.type,
+      },
+      body: fileBuffer,
+    });
 
-    const { data, error } = await supabase.storage
-      .from("media")
-      .upload(fileName, fileBlob, {
-        cacheControl: "3600",
-        upsert: false,
-      });
-
-    if (error) {
-      return new Response(
-        JSON.stringify({ error: error.message }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+    if (!uploadResponse.ok) {
+      const errorText = await uploadResponse.text();
+      console.error('Upload failed:', errorText);
+      throw new Error(`Upload failed: ${errorText}`);
     }
 
-    const { data: publicUrlData } = supabase.storage
-      .from("media")
-      .getPublicUrl(fileName);
+    const uploadResult = await uploadResponse.json();
+    console.log('Upload successful:', uploadResult);
+
+    const publicUrl = `${supabaseUrl}/storage/v1/object/public/media/${fileName}`;
 
     return new Response(
-      JSON.stringify({ url: publicUrlData.publicUrl }),
+      JSON.stringify({ success: true, url: publicUrl }),
       {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
       }
     );
-  } catch (err: any) {
+  } catch (error) {
+    console.error("Upload error:", error);
     return new Response(
-      JSON.stringify({ error: err.message }),
+      JSON.stringify({ 
+        success: false, 
+        error: error instanceof Error ? error.message : "Upload failed" 
+      }),
       {
         status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
       }
     );
   }

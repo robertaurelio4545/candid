@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Mail, MailOpen, Clock, X, Loader2, User, Shield, MessageSquare, Send } from 'lucide-react';
+import { Mail, MailOpen, Clock, X, Loader2, User, Shield, MessageSquare, Send, Trash2 } from 'lucide-react';
 import MessageAdmin from './MessageAdmin';
 
 type AdminMessage = {
@@ -12,6 +12,16 @@ type AdminMessage = {
   created_at: string;
   replied_at: string | null;
   type: 'admin';
+};
+
+type BroadcastMessage = {
+  id: string;
+  message: string;
+  created_at: string;
+  created_by: string;
+  target_user_id: string | null;
+  profiles: { username: string };
+  type: 'broadcast';
 };
 
 type UserMessage = {
@@ -25,7 +35,7 @@ type UserMessage = {
   type: 'user';
 };
 
-type CombinedMessage = AdminMessage | UserMessage;
+type CombinedMessage = AdminMessage | UserMessage | BroadcastMessage;
 
 type InboxProps = {
   onClose: () => void;
@@ -51,11 +61,16 @@ export default function Inbox({ onClose }: InboxProps) {
     if (!profile) return;
 
     try {
-      const [adminMessagesResult, receivedMessagesResult, sentMessagesResult] = await Promise.all([
+      const [adminMessagesResult, broadcastMessagesResult, receivedMessagesResult, sentMessagesResult] = await Promise.all([
         supabase
           .from('admin_messages')
           .select('*')
           .eq('user_id', profile.id)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('broadcast_messages')
+          .select('*, profiles!broadcast_messages_created_by_fkey(username)')
+          .or(`target_user_id.is.null,target_user_id.eq.${profile.id}`)
           .order('created_at', { ascending: false }),
         supabase
           .from('user_messages')
@@ -72,6 +87,11 @@ export default function Inbox({ onClose }: InboxProps) {
       const adminMessages: AdminMessage[] = (adminMessagesResult.data || []).map(msg => ({
         ...msg,
         type: 'admin' as const
+      }));
+
+      const broadcastMessages: BroadcastMessage[] = (broadcastMessagesResult.data || []).map(msg => ({
+        ...msg,
+        type: 'broadcast' as const
       }));
 
       const receivedMessages: UserMessage[] = (receivedMessagesResult.data || []).map(msg => ({
@@ -99,7 +119,7 @@ export default function Inbox({ onClose }: InboxProps) {
 
       const latestUserMessages = Array.from(uniqueUsers.values());
 
-      const combined = [...adminMessages, ...latestUserMessages].sort(
+      const combined = [...adminMessages, ...broadcastMessages, ...latestUserMessages].sort(
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
 
@@ -178,6 +198,83 @@ export default function Inbox({ onClose }: InboxProps) {
     }
   };
 
+  const deleteMessage = async (messageId: string) => {
+    if (!confirm('Are you sure you want to delete this message?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('user_messages')
+        .delete()
+        .eq('id', messageId);
+
+      if (error) throw error;
+
+      // Remove from conversation messages
+      setConversationMessages(prev => prev.filter(msg => msg.id !== messageId));
+
+      // Reload messages list
+      await loadMessages();
+    } catch (err) {
+      console.error('Error deleting message:', err);
+      alert('Failed to delete message. Please try again.');
+    }
+  };
+
+  const deleteAdminMessage = async (messageId: string) => {
+    if (!confirm('Are you sure you want to delete this message?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('admin_messages')
+        .delete()
+        .eq('id', messageId);
+
+      if (error) throw error;
+
+      // Close the selected message modal
+      setSelectedMessage(null);
+
+      // Reload messages list
+      await loadMessages();
+    } catch (err) {
+      console.error('Error deleting admin message:', err);
+      alert('Failed to delete message. Please try again.');
+    }
+  };
+
+  const deleteConversationThread = async (message: CombinedMessage, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (!confirm('Are you sure you want to delete this entire conversation thread? This cannot be undone.')) return;
+
+    try {
+      if (message.type === 'admin') {
+        const { error } = await supabase
+          .from('admin_messages')
+          .delete()
+          .eq('id', message.id);
+
+        if (error) throw error;
+      } else {
+        // For user messages, delete all messages in the conversation
+        const otherUserId = message.sender_id === profile?.id ? message.recipient_id : message.sender_id;
+
+        const { error } = await supabase
+          .from('user_messages')
+          .delete()
+          .or(`and(sender_id.eq.${profile?.id},recipient_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},recipient_id.eq.${profile?.id})`);
+
+        if (error) throw error;
+      }
+
+      // Reload messages list
+      await loadMessages();
+    } catch (err) {
+      console.error('Error deleting conversation thread:', err);
+      alert('Failed to delete conversation. Please try again.');
+    }
+  };
+
   const openMessage = async (message: CombinedMessage) => {
     setSelectedMessage(message);
     setReplyText('');
@@ -223,13 +320,15 @@ export default function Inbox({ onClose }: InboxProps) {
 
   const filteredMessages = messages.filter(msg => {
     if (activeTab === 'all') return true;
-    if (activeTab === 'admin') return msg.type === 'admin';
+    if (activeTab === 'admin') return msg.type === 'admin' || msg.type === 'broadcast';
     if (activeTab === 'users') return msg.type === 'user';
     return true;
   });
 
   const unreadCount = messages.filter(m =>
-    m.type === 'admin' ? m.status === 'unread' : !m.read
+    m.type === 'admin'
+      ? m.status === 'unread'
+      : !m.read && m.recipient_id === profile?.id
   ).length;
 
   if (loading) {
@@ -321,7 +420,14 @@ export default function Inbox({ onClose }: InboxProps) {
 
             {selectedMessage.type === 'admin' ? (
               <>
-                <div className="bg-slate-50 rounded-lg p-4 mb-6">
+                <div className="bg-slate-50 rounded-lg p-4 mb-6 relative">
+                  <button
+                    onClick={() => deleteAdminMessage(selectedMessage.id)}
+                    className="absolute top-4 right-4 p-2 text-red-500 hover:bg-red-50 rounded-lg transition"
+                    title="Delete message"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                   <div className="flex items-center gap-2 text-sm text-slate-600 mb-3">
                     <Shield className="w-4 h-4" />
                     <span className="font-medium">Admin Message</span>
@@ -356,6 +462,22 @@ export default function Inbox({ onClose }: InboxProps) {
                   </div>
                 )}
               </>
+            ) : selectedMessage.type === 'broadcast' ? (
+              <>
+                <div className="bg-slate-50 rounded-lg p-4 mb-6">
+                  <div className="flex items-center gap-2 text-sm text-slate-600 mb-3">
+                    <Shield className="w-4 h-4" />
+                    <span className="font-medium">
+                      {selectedMessage.target_user_id ? 'Admin Message' : 'Admin Announcement'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-slate-600 mb-2">
+                    <Clock className="w-4 h-4" />
+                    {new Date(selectedMessage.created_at).toLocaleString()}
+                  </div>
+                  <p className="text-slate-900 whitespace-pre-wrap">{selectedMessage.message}</p>
+                </div>
+              </>
             ) : (
               <>
                 <div className="mb-4">
@@ -379,15 +501,26 @@ export default function Inbox({ onClose }: InboxProps) {
                         return (
                           <div
                             key={msg.id}
-                            className={`flex ${isSentByMe ? 'justify-end' : 'justify-start'}`}
+                            className={`flex ${isSentByMe ? 'justify-end' : 'justify-start'} group`}
                           >
                             <div
-                              className={`max-w-[70%] rounded-lg p-4 ${
+                              className={`max-w-[70%] rounded-lg p-4 relative ${
                                 isSentByMe
                                   ? 'bg-slate-900 text-white'
                                   : 'bg-slate-100 text-slate-900'
                               }`}
                             >
+                              <button
+                                onClick={() => deleteMessage(msg.id)}
+                                className={`absolute -top-2 -right-2 p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition ${
+                                  isSentByMe
+                                    ? 'bg-red-500 hover:bg-red-600 text-white'
+                                    : 'bg-red-500 hover:bg-red-600 text-white'
+                                }`}
+                                title="Delete message"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
                               <p className="text-sm mb-1">{msg.message}</p>
                               <p className={`text-xs ${
                                 isSentByMe ? 'text-slate-300' : 'text-slate-500'
@@ -441,57 +574,74 @@ export default function Inbox({ onClose }: InboxProps) {
             ) : (
               <div className="divide-y divide-slate-200">
                 {filteredMessages.map(message => {
-                  const isUnread = message.type === 'admin' ? message.status === 'unread' : !message.read;
+                  const isUnread = message.type === 'admin'
+                    ? message.status === 'unread'
+                    : message.type === 'broadcast'
+                    ? false
+                    : !message.read && message.recipient_id === profile?.id;
 
                   return (
-                    <button
+                    <div
                       key={`${message.type}-${message.id}`}
-                      onClick={() => openMessage(message)}
-                      className="w-full text-left p-4 hover:bg-slate-50 transition"
+                      className="relative group"
                     >
-                      <div className="flex items-start gap-3">
-                        <div className="mt-1">
-                          {isUnread ? (
-                            <Mail className="w-5 h-5 text-blue-600" />
-                          ) : (
-                            <MailOpen className="w-5 h-5 text-slate-400" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            {message.type === 'admin' ? (
-                              <Shield className="w-4 h-4 text-blue-600" />
+                      <button
+                        onClick={() => openMessage(message)}
+                        className="w-full text-left p-4 hover:bg-slate-50 transition"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="mt-1">
+                            {isUnread ? (
+                              <Mail className="w-5 h-5 text-blue-600" />
                             ) : (
-                              <User className="w-4 h-4 text-slate-600" />
+                              <MailOpen className="w-5 h-5 text-slate-400" />
                             )}
-                            <span
-                              className={`text-sm font-medium ${
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              {message.type === 'admin' || message.type === 'broadcast' ? (
+                                <Shield className="w-4 h-4 text-blue-600" />
+                              ) : (
+                                <User className="w-4 h-4 text-slate-600" />
+                              )}
+                              <span
+                                className={`text-sm font-medium ${
+                                  isUnread ? 'text-slate-900' : 'text-slate-600'
+                                }`}
+                              >
+                                {message.type === 'admin'
+                                  ? message.admin_reply ? 'Admin replied' : 'Admin message'
+                                  : message.type === 'broadcast'
+                                  ? message.target_user_id ? 'Admin message' : 'Admin announcement'
+                                  : `From ${message.sender_profile?.username || 'Unknown'}`}
+                              </span>
+                              {message.type === 'admin' && message.status === 'replied' && (
+                                <span className="bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded">
+                                  Replied
+                                </span>
+                              )}
+                            </div>
+                            <p
+                              className={`text-sm line-clamp-2 ${
                                 isUnread ? 'text-slate-900' : 'text-slate-600'
                               }`}
                             >
-                              {message.type === 'admin'
-                                ? message.admin_reply ? 'Admin replied' : 'Admin message'
-                                : `From ${message.sender_profile?.username || 'Unknown'}`}
-                            </span>
-                            {message.type === 'admin' && message.status === 'replied' && (
-                              <span className="bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded">
-                                Replied
-                              </span>
-                            )}
+                              {message.message}
+                            </p>
+                            <p className="text-xs text-slate-500 mt-1">
+                              {new Date(message.created_at).toLocaleDateString()}
+                            </p>
                           </div>
-                          <p
-                            className={`text-sm line-clamp-2 ${
-                              isUnread ? 'text-slate-900' : 'text-slate-600'
-                            }`}
-                          >
-                            {message.message}
-                          </p>
-                          <p className="text-xs text-slate-500 mt-1">
-                            {new Date(message.created_at).toLocaleDateString()}
-                          </p>
                         </div>
-                      </div>
-                    </button>
+                      </button>
+                      <button
+                        onClick={(e) => deleteConversationThread(message, e)}
+                        className="absolute top-4 right-4 p-2 text-red-500 hover:bg-red-50 rounded-lg transition opacity-0 group-hover:opacity-100"
+                        title="Delete conversation"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   );
                 })}
               </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Auth from './components/Auth';
 import Header from './components/Header';
@@ -8,10 +9,13 @@ import Profile from './components/Profile';
 import AdminDashboard from './components/AdminDashboard';
 import Inbox from './components/Inbox';
 import DirectMessage from './components/DirectMessage';
+import PostDetail from './components/PostDetail';
+import Sponsors from './components/Sponsors';
+import Compliance2257 from './components/Compliance2257';
 import { supabase } from './lib/supabase';
 
 function AppContent() {
-  const { user, loading } = useAuth();
+  const { user, loading, refreshProfile, profile } = useAuth();
   const [showCreatePost, setShowCreatePost] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
@@ -34,29 +38,58 @@ function AppContent() {
   const handleUpgradeSuccess = async () => {
     if (!user) return;
 
+    alert('Processing your payment... Please wait while we activate your Pro membership.');
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return;
+
     try {
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7);
+      const verifyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/verify-payment`;
+      const response = await fetch(verifyUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+      });
 
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          is_pro: true,
-          subscription_expires_at: expiresAt.toISOString(),
-        })
-        .eq('id', user.id);
+      const result = await response.json();
 
-      if (error) throw error;
-
-      alert('Welcome to Pro! You now have access to all premium content.');
-      window.location.reload();
-    } catch (err: any) {
-      console.error('Error upgrading to Pro:', err);
-      alert('Payment successful but failed to activate Pro. Please contact support.');
+      if (result.success && result.is_pro) {
+        alert('Welcome to Pro! You now have access to all premium content.');
+        window.location.reload();
+        return;
+      }
+    } catch (err) {
+      console.error('Verification error:', err);
     }
+
+    let attempts = 0;
+    const maxAttempts = 15;
+    const interval = setInterval(async () => {
+      attempts++;
+
+      await refreshProfile();
+
+      const { data: currentProfile } = await supabase
+        .from('profiles')
+        .select('is_pro')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (currentProfile?.is_pro) {
+        clearInterval(interval);
+        alert('Welcome to Pro! You now have access to all premium content.');
+        window.location.reload();
+      } else if (attempts >= maxAttempts) {
+        clearInterval(interval);
+        alert('Payment received but Pro activation is taking longer than expected. Please refresh the page in a minute or contact support if the issue persists.');
+      }
+    }, 2000);
   };
 
-  const handleUpgrade = async () => {
+  const handleUpgrade = async (promoCode?: string) => {
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
@@ -80,6 +113,7 @@ function AppContent() {
           'Content-Type': 'application/json',
           'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
         },
+        body: JSON.stringify({ promoCode: promoCode || null }),
       });
 
       if (!response.ok) {
@@ -107,6 +141,7 @@ function AppContent() {
     }
   };
 
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -122,22 +157,58 @@ function AppContent() {
           onCreatePost={() => setShowCreatePost(true)}
           onShowProfile={() => setShowProfile(true)}
           onShowAdmin={() => setShowAdmin(true)}
-          onUpgrade={handleUpgrade}
+          onUpgrade={() => handleUpgrade()}
           onShowInbox={() => setShowInbox(true)}
         />
       )}
 
-      <main className="max-w-2xl mx-auto px-4 py-8">
-        <Feed
-          key={refreshKey}
-          isAuthenticated={!!user}
-          onLoginClick={() => setShowAuth(true)}
-          onMessageUser={(userId, username) => {
-            setMessageRecipient({ id: userId, username });
-            setShowDirectMessage(true);
-          }}
-        />
+      <main className="max-w-7xl mx-auto px-4 py-8">
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <>
+                <Feed
+                  key={refreshKey}
+                  isAuthenticated={!!user}
+                  onLoginClick={() => setShowAuth(true)}
+                  onMessageUser={(userId, username) => {
+                    setMessageRecipient({ id: userId, username });
+                    setShowDirectMessage(true);
+                  }}
+                />
+                <Sponsors />
+              </>
+            }
+          />
+          <Route
+            path="/post/:postId"
+            element={
+              <PostDetail
+                onMessageUser={(userId, username) => {
+                  setMessageRecipient({ id: userId, username });
+                  setShowDirectMessage(true);
+                }}
+              />
+            }
+          />
+          <Route path="/2257" element={<Compliance2257 />} />
+        </Routes>
       </main>
+
+      <footer className="max-w-7xl mx-auto px-4 py-6 mt-12 border-t border-slate-200">
+        <div className="text-center space-y-2">
+          <a
+            href="/2257"
+            className="text-sm text-slate-600 hover:text-slate-900 underline transition block"
+          >
+            18 U.S.C. § 2257 Compliance Statement
+          </a>
+          <div className="text-sm text-slate-600">
+            Contact: <a href="mailto:admin@candidteenpro.com" className="text-slate-900 hover:underline">admin@candidteenpro.com</a>
+          </div>
+        </div>
+      </footer>
 
       {showCreatePost && (
         <CreatePost
@@ -160,7 +231,7 @@ function AppContent() {
         <Inbox onClose={() => setShowInbox(false)} />
       )}
 
-      {showDirectMessage && messageRecipient && (
+{showDirectMessage && messageRecipient && (
         <DirectMessage
           recipientId={messageRecipient.id}
           recipientUsername={messageRecipient.username}
@@ -180,9 +251,11 @@ function AppContent() {
 
 function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <BrowserRouter>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
 
