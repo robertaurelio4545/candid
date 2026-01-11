@@ -1,10 +1,9 @@
 import { Post, Comment, PostMedia } from '../lib/supabase';
-import { Heart, MessageCircle, Trash2, Download, ChevronLeft, ChevronRight, Lock, Crown, Flag } from 'lucide-react';
+import { Heart, MessageCircle, Trash2, Download, ChevronLeft, ChevronRight, Lock, Crown } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { linkify } from '../utils/linkify';
-import ReportModal from './ReportModal';
 
 type PostCardProps = {
   post: Post;
@@ -25,8 +24,6 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
   const [submitting, setSubmitting] = useState(false);
   const [mediaItems, setMediaItems] = useState<PostMedia[]>([]);
   const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
-  const [downloadCount, setDownloadCount] = useState(0);
-  const [showReportModal, setShowReportModal] = useState(false);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -72,7 +69,6 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
     loadLikes();
     loadComments();
     loadMedia();
-    loadDownloadCount();
   }, [post.id]);
 
   const loadMedia = async () => {
@@ -108,17 +104,6 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
 
     if (data) {
       setComments(data);
-    }
-  };
-
-  const loadDownloadCount = async () => {
-    const { count } = await supabase
-      .from('downloads')
-      .select('*', { count: 'exact', head: true })
-      .eq('post_id', post.id);
-
-    if (count !== null) {
-      setDownloadCount(count);
     }
   };
 
@@ -173,78 +158,11 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
   };
 
   const isOwner = user?.id === post.user_id;
+  const isProUser = profile?.is_pro && (!profile.subscription_expires_at || new Date(profile.subscription_expires_at) > new Date());
+  const canViewLockedContent = isProUser || profile?.is_admin || isOwner;
+  const shouldShowLockOverlay = !canViewLockedContent;
 
-const isProUser =
-  profile?.is_pro &&
-  (!profile.subscription_expires_at ||
-    new Date(profile.subscription_expires_at) > new Date());
-
-// 🔓 NEW: public post flag
-const isPublicPost = post.visible_to_all === true;
-
-// 🔒 Only lock when NOT public
-const canViewLockedContent = isProUser || profile?.is_admin || isOwner;
-const shouldShowLockOverlay = !isPublicPost && !canViewLockedContent;
-
-
-
-  const addWatermarkToImage = async (imageUrl: string): Promise<Blob> => {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-
-        if (!ctx) {
-          reject(new Error('Failed to get canvas context'));
-          return;
-        }
-
-        ctx.drawImage(img, 0, 0);
-
-        const fontSize = Math.max(24, Math.floor(canvas.width / 30));
-        ctx.font = `bold ${fontSize}px Arial`;
-        ctx.fillStyle = 'red';
-        ctx.strokeStyle = 'black';
-        ctx.lineWidth = 3;
-        const text = 'candidteenpro.com';
-        const textMetrics = ctx.measureText(text);
-        const x = (canvas.width - textMetrics.width) / 2;
-        const y = canvas.height / 2;
-
-        ctx.strokeText(text, x, y);
-        ctx.fillText(text, x, y);
-
-        canvas.toBlob((blob) => {
-          if (blob) {
-            resolve(blob);
-          } else {
-            reject(new Error('Failed to create blob'));
-          }
-        }, 'image/jpeg', 0.95);
-      };
-
-      img.onerror = () => reject(new Error('Failed to load image'));
-      img.src = imageUrl;
-    });
-  };
-
-
-  // iOS Safari detection (including iPadOS)
-const isIOS = () =>
-  /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-  (navigator.userAgent.includes('Mac') && 'ontouchend' in document);
-
-
-
-const handleDownload = async () => {
-  // 🔓 PUBLIC posts → allow anyone
-  // 🔒 PRIVATE posts → require Pro/Admin + login
-  if (!isPublicPost) {
+  const handleDownload = async () => {
     if (!user) {
       alert('Please sign in to download media');
       return;
@@ -256,96 +174,55 @@ const handleDownload = async () => {
       upgradeBtn?.click();
       return;
     }
-  }
 
-  // 📱 Preserve user gesture on iOS
-  const ios = isIOS();
-  const iosTab = ios ? window.open('about:blank', '_blank') : null;
+    try {
+      await supabase
+        .from('downloads')
+        .insert({ post_id: post.id, user_id: user.id });
 
-  try {
-    // 📊 Track downloads only if user exists
-    if (user) {
-      await supabase.from('downloads').insert({
-        post_id: post.id,
-        user_id: user.id,
-      });
-      setDownloadCount(prev => prev + 1);
-    }
+      if (post.download_link && post.download_link.trim()) {
+        window.open(post.download_link, '_blank', 'noopener,noreferrer');
+        return;
+      }
 
-    // 🔗 Direct download link wins
-    if (post.download_link && post.download_link.trim()) {
-      if (ios && iosTab) iosTab.location.href = post.download_link;
-      else window.open(post.download_link, '_blank', 'noopener,noreferrer');
-      return;
-    }
-
-    const currentMediaUrl =
-      mediaItems.length > 0
+      const currentMediaUrl = mediaItems.length > 0
         ? mediaItems[currentMediaIndex].media_url
         : post.media_url;
 
-    const currentMediaType =
-      mediaItems.length > 0
+      const currentMediaType = mediaItems.length > 0
         ? mediaItems[currentMediaIndex].media_type
         : post.media_type;
 
-    // 🌍 PUBLIC post → just open media (works logged out + iPhone)
-    if (isPublicPost) {
-      if (ios && iosTab) iosTab.location.href = currentMediaUrl;
-      else window.open(currentMediaUrl, '_blank', 'noopener,noreferrer');
-      return;
+      const urlParts = currentMediaUrl.split('/');
+      const bucketIndex = urlParts.findIndex(part => part === 'media');
+
+      if (bucketIndex === -1) {
+        throw new Error('Invalid media URL');
+      }
+
+      const filePath = urlParts.slice(bucketIndex + 1).join('/');
+
+      const { data, error } = await supabase.storage
+        .from('media')
+        .download(filePath);
+
+      if (error) throw error;
+      if (!data) throw new Error('No data received');
+
+      const url = window.URL.createObjectURL(data);
+      const link = document.createElement('a');
+      link.href = url;
+      const extension = currentMediaType === 'video' ? 'mp4' : 'jpg';
+      link.download = `candidteenpro.com-${post.profiles?.username || 'media'}-${post.id.slice(0, 8)}.${extension}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error downloading media:', err);
+      alert('Failed to download media. Please try again.');
     }
-
-    // 🔒 PRIVATE post → signed URL + download
-    const urlParts = currentMediaUrl.split('/');
-    const bucketIndex = urlParts.findIndex(p => p === 'media');
-    if (bucketIndex === -1) throw new Error('Invalid media URL');
-
-    const filePath = urlParts.slice(bucketIndex + 1).join('/');
-
-    const { data: signed, error } = await supabase.storage
-      .from('media')
-      .createSignedUrl(filePath, 60);
-
-    if (error) throw error;
-
-    // iOS: open signed URL
-    if (ios) {
-      if (iosTab) iosTab.location.href = signed.signedUrl;
-      else window.location.href = signed.signedUrl;
-      return;
-    }
-
-    // Desktop/Android: force download
-    const res = await fetch(signed.signedUrl);
-    const blob = await res.blob();
-
-    if (currentMediaType === 'video') {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `candidteenpro-${post.id}.mp4`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } else {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `candidteenpro-${post.id}.jpg`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    }
-  } catch (err) {
-    console.error('Download failed:', err);
-    if (iosTab) iosTab.close();
-    alert('Failed to download media.');
-  }
-};
-
+  };
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -376,39 +253,6 @@ const handleDownload = async () => {
               <p className="text-xs text-slate-500">{formatDate(post.created_at)}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {!isOwner && user && (
-              <button
-                onClick={() => setShowReportModal(true)}
-                className="text-slate-400 hover:text-red-500 transition"
-                title="Report post"
-              >
-                <Flag className="w-5 h-5" />
-              </button>
-            )}
-            {isOwner && (
-              <button
-                onClick={handleDelete}
-                disabled={deleting}
-                className="text-slate-400 hover:text-red-500 transition disabled:opacity-50"
-              >
-                <Trash2 className="w-5 h-5" />
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-      {!isModal && (
-        <div className="p-4 flex items-center justify-end gap-2">
-          {!isOwner && user && (
-            <button
-              onClick={() => setShowReportModal(true)}
-              className="text-slate-400 hover:text-red-500 transition"
-              title="Report post"
-            >
-              <Flag className="w-5 h-5" />
-            </button>
-          )}
           {isOwner && (
             <button
               onClick={handleDelete}
@@ -418,6 +262,17 @@ const handleDownload = async () => {
               <Trash2 className="w-5 h-5" />
             </button>
           )}
+        </div>
+      )}
+      {!isModal && isOwner && (
+        <div className="p-4 flex items-center justify-end">
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className="text-slate-400 hover:text-red-500 transition disabled:opacity-50"
+          >
+            <Trash2 className="w-5 h-5" />
+          </button>
         </div>
       )}
 
@@ -533,9 +388,8 @@ const handleDownload = async () => {
               className="flex flex-col items-center text-slate-600 hover:text-slate-900 transition"
               title="Download"
             >
-              <span className="text-xs font-medium mb-1"></span>
               <Download className="w-6 h-6" />
-              <span className="text-xs mt-0.5">{downloadCount} {downloadCount === 1 ? 'download' : 'downloads'}</span>
+              <span className="text-xs mt-0.5">Download Video</span>
             </button>
           </div>
         </div>
@@ -655,13 +509,6 @@ const handleDownload = async () => {
           </>
         )}
       </div>
-
-      {showReportModal && (
-        <ReportModal
-          postId={post.id}
-          onClose={() => setShowReportModal(false)}
-        />
-      )}
     </div>
   );
 }
