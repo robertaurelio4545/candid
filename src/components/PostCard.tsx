@@ -424,7 +424,7 @@ export default function PostCard({ post, onDelete, onOpen, isModal = false, onMe
                 <Crown className="w-3 h-3 text-yellow-500" />
               )}
             </span>
-            <span dangerouslySetInnerHTML={{ __html: linkify(post.caption) }} />
+            {post.caption}
           </p>
         )}
 

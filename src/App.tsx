@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Auth from './components/Auth';
 import Header from './components/Header';
@@ -9,8 +8,6 @@ import Profile from './components/Profile';
 import AdminDashboard from './components/AdminDashboard';
 import Inbox from './components/Inbox';
 import DirectMessage from './components/DirectMessage';
-import PostDetail from './components/PostDetail';
-import Sponsors from './components/Sponsors';
 import { supabase } from './lib/supabase';
 
 function AppContent() {
@@ -130,37 +127,16 @@ function AppContent() {
         />
       )}
 
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        <Routes>
-          <Route
-            path="/"
-            element={
-              <>
-                <Feed
-                  key={refreshKey}
-                  isAuthenticated={!!user}
-                  onLoginClick={() => setShowAuth(true)}
-                  onMessageUser={(userId, username) => {
-                    setMessageRecipient({ id: userId, username });
-                    setShowDirectMessage(true);
-                  }}
-                />
-                <Sponsors />
-              </>
-            }
-          />
-          <Route
-            path="/post/:postId"
-            element={
-              <PostDetail
-                onMessageUser={(userId, username) => {
-                  setMessageRecipient({ id: userId, username });
-                  setShowDirectMessage(true);
-                }}
-              />
-            }
-          />
-        </Routes>
+      <main className="max-w-2xl mx-auto px-4 py-8">
+        <Feed
+          key={refreshKey}
+          isAuthenticated={!!user}
+          onLoginClick={() => setShowAuth(true)}
+          onMessageUser={(userId, username) => {
+            setMessageRecipient({ id: userId, username });
+            setShowDirectMessage(true);
+          }}
+        />
       </main>
 
       {showCreatePost && (
@@ -204,11 +180,9 @@ function AppContent() {
 
 function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
-    </BrowserRouter>
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 

@@ -39,7 +39,7 @@ export default function CreatePost({ onClose, onPostCreated }: CreatePostProps) 
       return;
     }
 
-    const MAX_FILE_SIZE = 133 * 1024 * 1024; // 133MB
+    const MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024;
     const validFiles: File[] = [];
     const newPreviews: string[] = [];
     const newFileTypes: string[] = [];
@@ -51,8 +51,8 @@ export default function CreatePost({ onClose, onPostCreated }: CreatePostProps) 
       }
 
       if (file.size > MAX_FILE_SIZE) {
-        const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
-        setError(`File "${file.name}" is too large (${fileSizeMB}MB). Maximum file size is 133MB.`);
+        const fileSizeGB = (file.size / (1024 * 1024 * 1024)).toFixed(2);
+        setError(`File "${file.name}" is too large (${fileSizeGB}GB). Maximum file size is 5GB.`);
         continue;
       }
 
@@ -82,26 +82,45 @@ export default function CreatePost({ onClose, onPostCreated }: CreatePostProps) 
     setFileTypes(prev => prev.filter((_, i) => i !== index));
   };
 
-  const uploadFileToStorage = async (file: File, fileName: string, progressCallback?: (progress: number) => void): Promise<string> => {
-    console.log('Uploading file via Supabase client:', fileName, 'Type:', file.type, 'Size:', file.size);
+  const uploadFileToStorage = async (file: File, fileName: string): Promise<string> => {
+    const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+    console.log(`Uploading file: ${fileName}, Type: ${file.type}, Size: ${fileSizeMB}MB`);
 
-    const { data, error } = await supabase.storage
-      .from('media')
-      .upload(fileName, file, {
-        cacheControl: '3600',
-        upsert: false,
-      });
+    try {
+      const { data, error } = await supabase.storage
+        .from('media')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false,
+        });
 
-    if (error) {
-      console.error('Upload error:', error);
-      throw new Error(error.message);
+      if (error) {
+        console.error('Supabase storage error:', {
+          message: error.message,
+          name: error.name,
+          statusCode: error.statusCode,
+        });
+
+        if (error.message.includes('already exists')) {
+          const newFileName = `${user?.id}/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${file.name.split('.').pop()}`;
+          console.log('File exists, retrying with new name:', newFileName);
+          return uploadFileToStorage(file, newFileName);
+        }
+
+        throw new Error(`Upload error: ${error.message}`);
+      }
+
+      console.log('Upload successful, getting public URL...');
+      const { data: publicUrlData } = supabase.storage
+        .from('media')
+        .getPublicUrl(fileName);
+
+      console.log('Public URL generated:', publicUrlData.publicUrl);
+      return publicUrlData.publicUrl;
+    } catch (err: any) {
+      console.error('Upload exception:', err);
+      throw new Error(err.message || 'Upload failed. Please try again or use a smaller file.');
     }
-
-    const { data: publicUrlData } = supabase.storage
-      .from('media')
-      .getPublicUrl(fileName);
-
-    return publicUrlData.publicUrl;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -116,27 +135,20 @@ export default function CreatePost({ onClose, onPostCreated }: CreatePostProps) 
       const uploadedUrls: string[] = [];
       const totalFiles = files.length;
 
-      // Upload files in parallel for faster processing
-      const uploadPromises = files.map(async (file, i) => {
+      for (let i = 0; i < totalFiles; i++) {
+        const file = files[i];
         const fileExt = file.name.split('.').pop();
         const fileName = `${user.id}/${Date.now()}_${i}.${fileExt}`;
 
         try {
-          const url = await uploadFileToStorage(file, fileName, (progress) => {
-            // Update individual file progress
-            const overallProgress = ((i / totalFiles) * 100) + (progress / totalFiles);
-            setUploadProgress(Math.round(overallProgress));
-          });
-          return url;
+          const url = await uploadFileToStorage(file, fileName);
+          uploadedUrls.push(url);
+          setUploadProgress(Math.round(((i + 1) / totalFiles) * 100));
         } catch (uploadError: any) {
           console.error(`Failed to upload file ${i}:`, uploadError);
           throw uploadError;
         }
-      });
-
-      const results = await Promise.all(uploadPromises);
-      uploadedUrls.push(...results);
-      setUploadProgress(100);
+      }
 
       const { data: post, error: insertError } = await supabase
         .from('posts')
@@ -222,7 +234,7 @@ export default function CreatePost({ onClose, onPostCreated }: CreatePostProps) 
               >
                 <Upload className="w-12 h-12 mx-auto mb-4 text-slate-400" />
                 <p className="text-slate-600 font-medium mb-1">Click to upload</p>
-                <p className="text-sm text-slate-500">Images and videos (max 133MB per file)</p>
+                <p className="text-sm text-slate-500">Images and videos</p>
               </button>
             ) : (
               <div className="space-y-3">

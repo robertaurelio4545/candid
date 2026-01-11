@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { supabase, Post } from '../lib/supabase';
 import PostCard from './PostCard';
 import PostModal from './PostModal';
@@ -12,7 +11,6 @@ type FeedProps = {
 };
 
 export default function Feed({ isAuthenticated, onLoginClick, onMessageUser }: FeedProps) {
-  const navigate = useNavigate();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
@@ -83,52 +81,29 @@ export default function Feed({ isAuthenticated, onLoginClick, onMessageUser }: F
         </div>
       )}
 
-      <div className="columns-2 sm:columns-3 md:columns-4 lg:columns-5 gap-4">
+      <div className="space-y-6">
         {posts.map((post) => (
-          <div key={post.id} className="relative group break-inside-avoid mb-4">
-            <div
-              onClick={() => navigate(`/post/${post.id}`)}
-              className="cursor-pointer block bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition"
-            >
-              {post.media && post.media.length > 0 ? (
-                post.media[0].media_type === 'video' ? (
-                  <video
-                    src={post.media[0].media_url}
-                    className="w-full h-auto object-cover"
-                  />
-                ) : (
-                  <img
-                    src={post.media[0].media_url}
-                    alt={post.caption || 'Post'}
-                    className="w-full h-auto object-cover"
-                  />
-                )
-              ) : post.media_type === 'video' ? (
-                <video
-                  src={post.media_url}
-                  className="w-full h-auto object-cover"
-                />
-              ) : (
-                <img
-                  src={post.media_url}
-                  alt={post.caption || 'Post'}
-                  className="w-full h-auto object-cover"
-                />
-              )}
-              <div className="p-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-slate-400 to-slate-600 flex items-center justify-center text-white text-xs font-semibold">
-                    {post.profiles?.username?.charAt(0).toUpperCase() || 'U'}
-                  </div>
-                  <span className="text-sm font-semibold text-slate-900 truncate">
-                    {post.profiles?.username || 'Unknown'}
-                  </span>
+          <div key={post.id} className="relative">
+            <PostCard
+              post={post}
+              onDelete={fetchPosts}
+              onOpen={() => setSelectedPost(post)}
+              onMessageUser={onMessageUser}
+            />
+            {!isAuthenticated && (
+              <div
+                className="absolute inset-0 backdrop-blur-md bg-white/30 rounded-xl flex items-center justify-center cursor-pointer"
+                onClick={onLoginClick}
+              >
+                <div className="bg-white rounded-2xl shadow-2xl p-8 text-center max-w-sm mx-4">
+                  <h3 className="text-2xl font-bold text-slate-900 mb-2">Sign in to view</h3>
+                  <p className="text-slate-600 mb-6">Create an account to see all content and interact with posts</p>
+                  <button className="px-6 py-3 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition font-semibold">
+                    Sign In Now
+                  </button>
                 </div>
-                {post.caption && (
-                  <p className="text-xs text-slate-600 line-clamp-2">{post.caption}</p>
-                )}
               </div>
-            </div>
+            )}
           </div>
         ))}
       </div>

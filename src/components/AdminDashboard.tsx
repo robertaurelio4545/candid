@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, Post, Profile, AdminAction } from '../lib/supabase';
-import { X, Trash2, Shield, Users, Image as ImageIcon, Activity, Lock, Unlock, Trophy, Search, Crown, MessageSquare, Send, ExternalLink, CheckCircle, XCircle } from 'lucide-react';
+import { X, Trash2, Shield, Users, Image as ImageIcon, Activity, Lock, Unlock, Trophy, Search, Crown, MessageSquare, Send } from 'lucide-react';
 import PostCard from './PostCard';
 
 type AdminDashboardProps = {
@@ -43,7 +43,7 @@ type UserToUserMessage = {
 type CombinedMessage = AdminMessage | UserToUserMessage;
 
 export default function AdminDashboard({ onClose }: AdminDashboardProps) {
-  const [activeTab, setActiveTab] = useState<'posts' | 'users' | 'logs' | 'messages' | 'sponsors'>('posts');
+  const [activeTab, setActiveTab] = useState<'posts' | 'users' | 'logs' | 'messages'>('posts');
   const [posts, setPosts] = useState<Post[]>([]);
   const [users, setUsers] = useState<Profile[]>([]);
   const [logs, setLogs] = useState<AdminAction[]>([]);
@@ -58,9 +58,6 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [userPosts, setUserPosts] = useState<Post[]>([]);
   const [loadingUserPosts, setLoadingUserPosts] = useState(false);
-  const [sponsorRequests, setSponsorRequests] = useState<any[]>([]);
-  const [activeSponsors, setActiveSponsors] = useState<any[]>([]);
-  const [assigningSpot, setAssigningSpot] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -77,9 +74,6 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
         await fetchLogs();
       } else if (activeTab === 'messages') {
         await fetchMessages();
-      } else if (activeTab === 'sponsors') {
-        await fetchSponsorRequests();
-        await fetchActiveSponsors();
       }
       await fetchStats();
     } catch (err) {
@@ -127,36 +121,6 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
 
     if (error) throw error;
     setLogs(data || []);
-  };
-
-  const fetchSponsorRequests = async () => {
-    const { data, error } = await supabase
-      .from('sponsor_requests')
-      .select(`
-        *,
-        profiles (
-          username,
-          avatar_url
-        )
-      `)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Error fetching sponsor requests:', error);
-      throw error;
-    }
-    console.log('Fetched sponsor requests:', data);
-    setSponsorRequests(data || []);
-  };
-
-  const fetchActiveSponsors = async () => {
-    const { data, error } = await supabase
-      .from('sponsors')
-      .select('*')
-      .order('spot_number', { ascending: true });
-
-    if (error) throw error;
-    setActiveSponsors(data || []);
   };
 
   const fetchMessages = async () => {
@@ -488,85 +452,6 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
     }
   };
 
-  const handleApproveSponsor = async (requestId: string, spotNumber: number) => {
-    const request = sponsorRequests.find(r => r.id === requestId);
-    if (!request) return;
-
-    setAssigningSpot(requestId);
-    try {
-      const existingSponsor = activeSponsors.find(s => s.spot_number === spotNumber);
-      if (existingSponsor) {
-        await supabase.from('sponsors').delete().eq('id', existingSponsor.id);
-      }
-
-      const { error: sponsorError } = await supabase
-        .from('sponsors')
-        .insert({
-          spot_number: spotNumber,
-          website_name: request.website_name,
-          website_link: request.website_link,
-          request_id: requestId
-        });
-
-      if (sponsorError) throw sponsorError;
-
-      const { error: updateError } = await supabase
-        .from('sponsor_requests')
-        .update({
-          status: 'approved',
-          reviewed_at: new Date().toISOString()
-        })
-        .eq('id', requestId);
-
-      if (updateError) throw updateError;
-
-      await fetchSponsorRequests();
-      await fetchActiveSponsors();
-    } catch (err) {
-      console.error('Error approving sponsor:', err);
-      alert('Failed to approve sponsor');
-    } finally {
-      setAssigningSpot(null);
-    }
-  };
-
-  const handleRejectSponsor = async (requestId: string) => {
-    if (!confirm('Are you sure you want to reject this sponsor request?')) return;
-
-    try {
-      const { error } = await supabase
-        .from('sponsor_requests')
-        .update({
-          status: 'rejected',
-          reviewed_at: new Date().toISOString()
-        })
-        .eq('id', requestId);
-
-      if (error) throw error;
-      await fetchSponsorRequests();
-    } catch (err) {
-      console.error('Error rejecting sponsor:', err);
-      alert('Failed to reject sponsor');
-    }
-  };
-
-  const handleRemoveSponsor = async (sponsorId: string) => {
-    if (!confirm('Are you sure you want to remove this sponsor?')) return;
-
-    try {
-      const { error } = await supabase
-        .from('sponsors')
-        .delete()
-        .eq('id', sponsorId);
-
-      if (error) throw error;
-      await fetchActiveSponsors();
-    } catch (err) {
-      console.error('Error removing sponsor:', err);
-      alert('Failed to remove sponsor');
-    }
-  };
-
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
       <div className="bg-white rounded-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
@@ -674,21 +559,6 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
               }`}
             >
               Activity Logs
-            </button>
-            <button
-              onClick={() => setActiveTab('sponsors')}
-              className={`px-4 py-2 font-medium transition relative ${
-                activeTab === 'sponsors'
-                  ? 'text-slate-900 border-b-2 border-slate-900'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Sponsors
-              {sponsorRequests.filter(r => r.status === 'pending').length > 0 && (
-                <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                  {sponsorRequests.filter(r => r.status === 'pending').length}
-                </span>
-              )}
             </button>
           </div>
 
@@ -1052,154 +922,6 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
                   {logs.length === 0 && (
                     <p className="text-center text-slate-600 py-8">No activity logs yet</p>
                   )}
-                </div>
-              )}
-
-              {activeTab === 'sponsors' && (
-                <div className="space-y-6">
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-900 mb-4">Active Sponsors</h3>
-                    <div className="grid grid-cols-5 gap-4 mb-8">
-                      {[1, 2, 3, 4, 5].map((spotNumber) => {
-                        const sponsor = activeSponsors.find(s => s.spot_number === spotNumber);
-                        return (
-                          <div
-                            key={spotNumber}
-                            className="aspect-square border-2 border-slate-200 rounded-lg flex flex-col items-center justify-center p-3 relative"
-                          >
-                            <div className="text-xs font-semibold text-slate-400 mb-2">#{spotNumber}</div>
-                            {sponsor ? (
-                              <>
-                                <a
-                                  href={sponsor.website_link}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex flex-col items-center gap-2 text-center group"
-                                >
-                                  <ExternalLink className="w-6 h-6 text-slate-600 group-hover:text-slate-900 transition" />
-                                  <span className="text-xs font-medium text-slate-700 group-hover:text-slate-900 line-clamp-2">
-                                    {sponsor.website_name}
-                                  </span>
-                                </a>
-                                <button
-                                  onClick={() => handleRemoveSponsor(sponsor.id)}
-                                  className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded hover:bg-red-600 transition"
-                                >
-                                  <X className="w-3 h-3" />
-                                </button>
-                              </>
-                            ) : (
-                              <div className="text-center">
-                                <div className="w-6 h-6 mx-auto mb-2 bg-slate-100 rounded" />
-                                <span className="text-xs text-slate-400">Available</span>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-900 mb-4">Sponsor Requests</h3>
-                    <div className="space-y-3">
-                      {sponsorRequests.filter(r => r.status === 'pending').map((request) => (
-                        <div key={request.id} className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-2">
-                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-400 to-slate-600 flex items-center justify-center text-white font-semibold">
-                                  {request.profiles?.username?.charAt(0).toUpperCase() || 'U'}
-                                </div>
-                                <div>
-                                  <p className="font-semibold text-slate-900">{request.profiles?.username}</p>
-                                  <p className="text-xs text-slate-600">{formatDate(request.created_at)}</p>
-                                </div>
-                              </div>
-                              <div className="bg-white rounded-lg p-3 mb-3">
-                                <p className="font-semibold text-slate-900 mb-1">{request.website_name}</p>
-                                <a
-                                  href={request.website_link}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-sm text-blue-600 hover:underline flex items-center gap-1"
-                                >
-                                  <ExternalLink className="w-3 h-3" />
-                                  {request.website_link}
-                                </a>
-                              </div>
-                              <div className="flex gap-2">
-                                <select
-                                  onChange={(e) => {
-                                    const spot = parseInt(e.target.value);
-                                    if (spot) handleApproveSponsor(request.id, spot);
-                                  }}
-                                  disabled={assigningSpot === request.id}
-                                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:border-slate-500 focus:ring-2 focus:ring-slate-200 outline-none"
-                                >
-                                  <option value="">Assign to spot...</option>
-                                  {[1, 2, 3, 4, 5].map(num => (
-                                    <option key={num} value={num}>
-                                      Spot #{num} {activeSponsors.find(s => s.spot_number === num) ? '(Replace)' : ''}
-                                    </option>
-                                  ))}
-                                </select>
-                                <button
-                                  onClick={() => handleRejectSponsor(request.id)}
-                                  className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition font-medium text-sm flex items-center gap-2"
-                                >
-                                  <XCircle className="w-4 h-4" />
-                                  Reject
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                      {sponsorRequests.filter(r => r.status === 'pending').length === 0 && (
-                        <div className="text-center py-12 bg-slate-50 rounded-lg">
-                          <ExternalLink className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                          <p className="text-slate-600">No pending sponsor requests</p>
-                          <p className="text-xs text-slate-400 mt-2">Total requests loaded: {sponsorRequests.length}</p>
-                        </div>
-                      )}
-                    </div>
-
-                    {sponsorRequests.filter(r => r.status !== 'pending').length > 0 && (
-                      <div className="mt-8">
-                        <h4 className="text-md font-semibold text-slate-900 mb-3">Reviewed Requests</h4>
-                        <div className="space-y-2">
-                          {sponsorRequests.filter(r => r.status !== 'pending').slice(0, 10).map((request) => (
-                            <div key={request.id} className={`rounded-lg p-3 border ${
-                              request.status === 'approved' ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-200'
-                            }`}>
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-400 to-slate-600 flex items-center justify-center text-white text-sm font-semibold">
-                                    {request.profiles?.username?.charAt(0).toUpperCase() || 'U'}
-                                  </div>
-                                  <div>
-                                    <p className="font-medium text-slate-900 text-sm">{request.website_name}</p>
-                                    <p className="text-xs text-slate-600">by {request.profiles?.username}</p>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                                    request.status === 'approved'
-                                      ? 'bg-green-100 text-green-700'
-                                      : 'bg-slate-100 text-slate-700'
-                                  }`}>
-                                    {request.status}
-                                  </span>
-                                  <p className="text-xs text-slate-500">{formatDate(request.reviewed_at || request.created_at)}</p>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
                 </div>
               )}
             </div>
